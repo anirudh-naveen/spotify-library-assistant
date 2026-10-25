@@ -332,7 +332,7 @@ class Spotify:
             uri = track.get("uri") or ""
             if track.get("is_local") or not uri.startswith("spotify:track:"):
                 continue  # local files can't be added via the API
-            yield track
+            yield {**track, "added_at": entry.get("added_at")}
 
     def create_playlist(self, name):
         return self.call("POST", "me/playlists", json={
@@ -426,22 +426,50 @@ def parse_toptags(data, min_weight=MIN_TAG_WEIGHT, max_tags=MAX_TAGS):
 
 # ---------------------------------------------------------------- genre map
 
+def parse_target(value, default_name=""):
+    """A destination playlist: a name string, or {"playlist": name, "playlist_id": id}."""
+    if isinstance(value, dict):
+        name = str(value.get("playlist") or "").strip()
+        playlist_id = str(value.get("playlist_id") or "").strip() or None
+    else:
+        name, playlist_id = str(value or "").strip(), None
+    return {"playlist_id": playlist_id, "playlist": name or default_name}
+
+
 def parse_genre_map(config, source="genre map"):
-    """Validate a genre map config dict. Returns ({playlist: {keywords}}, unsorted name or None)."""
+    """Validate a genre map config dict.
+
+    Returns ({genre: {"keywords": {...}, "target": {"playlist_id", "playlist"}}}, unsorted target or None).
+    Each genre is either a keyword list (songs go to a playlist named after the genre) or
+    {"keywords": [...], "playlist": "Name", "playlist_id": "optional Spotify ID"}.
+    The older top-level key "playlists" is read the same way as "genres".
+    """
     if not isinstance(config, dict):
         raise GenrefyError(f"{source} must be a JSON object.")
-    playlists = {}
-    for name, keywords in (config.get("playlists") or {}).items():
+    raw = config.get("genres") if "genres" in config else config.get("playlists")
+    if raw is not None and not isinstance(raw, dict):
+        raise GenrefyError(f'{source}: "genres" must be an object.')
+    genres = {}
+    for genre, value in (raw or {}).items():
+        genre = genre.strip()
+        if isinstance(value, dict):
+            keywords, target = value.get("keywords"), parse_target(value, genre)
+        else:
+            keywords, target = value, parse_target(genre)
         if isinstance(keywords, str):  # "Pop": "pop" instead of ["pop"]
             keywords = [keywords]
         kws = {norm(k) for k in keywords or []} - {""}
-        if not name.strip() or not kws:
-            raise GenrefyError(f'{source}: playlist "{name}" needs a name and at least one keyword.')
-        playlists[name.strip()] = kws
-    if not playlists:
-        raise GenrefyError(f"{source} has no playlists defined.")
-    unsorted = (config.get("unsorted_playlist") or "").strip() or None
-    return playlists, unsorted
+        if not genre or not kws:
+            raise GenrefyError(f'{source}: genre "{genre}" needs a name and at least one keyword.')
+        if not target["playlist"] and not target["playlist_id"]:
+            raise GenrefyError(f'{source}: genre "{genre}" needs a playlist to go to.')
+        genres[genre] = {"keywords": kws, "target": target}
+    if not genres:
+        raise GenrefyError(f"{source} has no genres defined.")
+    unsorted = parse_target(config.get("unsorted_playlist"))
+    if not unsorted["playlist"] and not unsorted["playlist_id"]:
+        unsorted = None
+    return genres, unsorted
 
 
 def read_genre_config(path=MAP_FILE):
@@ -499,24 +527,133 @@ def match_genres(artists, genre_map, tag_lookup):
     return hits, seen
 
 
-def new_uris(tracks, existing):
-    """URIs from tracks not already in `existing`, in order, without duplicates."""
-    seen = set(existing)
-    out = []
-    for t in tracks:
-        uri = t["uri"]
-        if uri not in seen:
-            seen.add(uri)
-            out.append(uri)
-    return out
+# Title decorations that don't make it a different song. Live, remix, acoustic etc. are kept.
+_TITLE_NOISE = (r"featuring|feat\.?|ft\.?|with|remaster(?:ed)?|\d{4} remaster(?:ed)?|single version|"
+                r"album version|radio edit|explicit|clean|mono|stereo|original mix")
+SAME_SONG_MAX_LENGTH_DIFF_MS = 4000
+
+
+def song_key(name, artists):
+    """A loose identity for a song: cleaned-up title plus main artist. '' if there's no artist."""
+    if not artists:
+        return ""
+    title = (name or "").lower()
+    title = re.sub(rf"\s*[(\[]\s*(?:{_TITLE_NOISE})\b[^)\]]*[)\]]", "", title)  # "(feat. X)", "[Remastered]"
+    title = re.sub(rf"\s+-\s+(?:{_TITLE_NOISE})\b.*$", "", title)                # " - 2011 Remaster"
+    cleaned = re.sub(r"\s+", " ", re.sub(r"[^\w\s]", "", title)).strip()
+    return f"{cleaned or title.strip()}|{artists[0].strip().lower()}"
 
 
 def track_summary(track):
+    artists = [a["name"] for a in track.get("artists") or [] if a and a.get("name")]
+    name = track.get("name") or "(untitled)"
     return {
         "uri": track["uri"],
-        "name": track.get("name") or "(untitled)",
-        "artists": [a["name"] for a in track.get("artists") or [] if a and a.get("name")],
+        "name": name,
+        "artists": artists,
+        "isrc": ((track.get("external_ids") or {}).get("isrc") or "").upper() or None,
+        "duration_ms": track.get("duration_ms"),
+        "key": song_key(name, artists),
+        "added_at": track.get("added_at"),                                  # "2024-05-01T12:00:00Z"
+        "release_date": (track.get("album") or {}).get("release_date"),    # "2019", "2019-05" or "2019-05-03"
     }
+
+
+# ---------------------------------------------------------------- date filters
+
+DATE_FILTERS = ("added_after", "added_before", "released_after", "released_before")
+
+
+def date_bound(value, end=False):
+    """Turn "2019", "2019-05" or "2019-05-03" into a full YYYY-MM-DD bound ('' if empty).
+    end=True gives the last day of a year or month, so "before 2019" includes all of 2019."""
+    value = (value or "").strip()
+    if not value:
+        return ""
+    if not re.fullmatch(r"\d{4}(-\d{2}(-\d{2})?)?", value):
+        raise GenrefyError(f'"{value}" isn\'t a date. Use YYYY, YYYY-MM or YYYY-MM-DD.')
+    if len(value) == 4:
+        return value + ("-12-31" if end else "-01-01")
+    if len(value) == 7:
+        return value + ("-31" if end else "-01")  # only compared as text, so -31 works for any month
+    return value
+
+
+def parse_date_filters(raw):
+    """Normalize {"added_after": "2024", ...} into full-date bounds, dropping empty ones."""
+    out = {}
+    for name in DATE_FILTERS:
+        bound = date_bound((raw or {}).get(name), end=name.endswith("_before"))
+        if bound:
+            out[name] = bound
+    for kind in ("added", "released"):
+        after, before = out.get(f"{kind}_after"), out.get(f"{kind}_before")
+        if after and before and after > before:
+            raise GenrefyError(f"The {kind} date range ends before it starts.")
+    return out
+
+
+def passes_date_filters(track, filters):
+    """True if the track's dates are inside every range in `filters` (inclusive).
+    A song with no known date is left out when that date is being filtered."""
+    if not filters:
+        return True
+    added = (track.get("added_at") or "")[:10]
+    if filters.get("added_after") and not (added and added >= filters["added_after"]):
+        return False
+    if filters.get("added_before") and not (added and added <= filters["added_before"]):
+        return False
+    released = track.get("release_date") or ""
+    if filters.get("released_after") or filters.get("released_before"):
+        if not released:
+            return False
+        # a partial date like "2019" counts if any part of that year is inside the range
+        if filters.get("released_after") and date_bound(released, end=True) < filters["released_after"]:
+            return False
+        if filters.get("released_before") and date_bound(released) > filters["released_before"]:
+            return False
+    return True
+
+
+def new_tracks(tracks, existing=()):
+    """Tracks (summaries) not already in `existing` or earlier in `tracks`.
+
+    Exact repeats (same Spotify URI) are dropped quietly. The same song under a different
+    URI (a single vs. the album version, a remaster) is recognised by ISRC, or by title and
+    main artist with nearly the same length, and counted. Returns (new tracks, same-song count).
+    """
+    uris, isrcs, lengths_by_key = set(), set(), {}
+
+    def remember(t):
+        uris.add(t["uri"])
+        if t.get("isrc"):
+            isrcs.add(t["isrc"])
+        if t.get("key"):
+            lengths_by_key.setdefault(t["key"], []).append(t.get("duration_ms"))
+
+    def same_song_seen(t):
+        if t.get("isrc") and t["isrc"] in isrcs:
+            return True
+        for length in lengths_by_key.get(t.get("key") or None, []):
+            if length is None or t.get("duration_ms") is None:
+                return True
+            if abs(length - t["duration_ms"]) <= SAME_SONG_MAX_LENGTH_DIFF_MS:
+                return True
+        return False
+
+    for t in existing:
+        remember(t)
+    out, same_song = [], 0
+    for t in tracks:
+        if t["uri"] in uris:
+            continue
+        if same_song_seen(t):
+            uris.add(t["uri"])  # so a later repeat of this exact track is dropped too
+            same_song += 1
+            continue
+        remember(t)
+        out.append(t)
+    return out, same_song
 
 
 # ---------------------------------------------------------------- plan and apply
@@ -534,9 +671,14 @@ def resolve_source(source, by_name):
     return source_id, name
 
 
-def build_plan(sp, lastfm, source, genre_map, unsorted_name, progress=None):
+UNMATCHED_LABEL = "Unmatched songs"
+
+
+def build_plan(sp, lastfm, source, genres, unsorted=None, progress=None, filters=None):
     """Work out which songs would go where, without changing anything.
 
+    `genres` and `unsorted` come from parse_genre_map(). Several genres may share a playlist.
+    `filters` (from parse_date_filters) limits which source songs are considered.
     progress(stage, done, total) is called as work proceeds, if given.
     The returned dict is JSON-serializable.
     """
@@ -544,23 +686,36 @@ def build_plan(sp, lastfm, source, genre_map, unsorted_name, progress=None):
     progress("Reading your playlists", 0, 0)
     me = sp.me()
     my_id = me["id"]
-    by_name = index_by_name(sp.my_playlists(), my_id)
+    mine = sp.my_playlists()
+    by_name = index_by_name(mine, my_id)
+    by_id = {p["id"]: p for p in mine if p.get("id")}
     source_id, source_name = resolve_source(source, by_name)
 
-    # --- find (or plan to create) each target playlist
-    target_names = list(dict.fromkeys(list(genre_map) + ([unsorted_name] if unsorted_name else [])))
-    targets = {}
-    for name in target_names:
-        p = by_name.get(name.lower())
+    # --- find (or plan to create) each destination playlist; genres can share one
+    targets = {}  # key -> {"name", "playlist", "genres"}
+
+    def add_target(label, target):
+        p = by_id.get(target["playlist_id"]) if target["playlist_id"] else by_name.get(target["playlist"].lower())
+        if target["playlist_id"] and not p:
+            raise GenrefyError(f'The playlist chosen for "{label}" isn\'t in your library anymore. '
+                               "Pick another one in the genre map.")
         if p and not can_edit(p, my_id):
-            raise GenrefyError(f'"{name}" isn\'t your playlist, so songs can\'t be added to it. '
-                               "Rename it in the genre map.")
-        targets[name] = p  # None means it needs creating
+            raise GenrefyError(f'"{p.get("name")}" (for "{label}") isn\'t your playlist, so songs can\'t be '
+                               "added to it. Pick a different playlist in the genre map.")
+        key = p["id"] if p else "new:" + target["playlist"].lower()
+        entry = targets.setdefault(key, {"name": p.get("name") if p else target["playlist"],
+                                         "playlist": p, "genres": []})
+        entry["genres"].append(label)
+        return key
+
+    genre_target = {genre: add_target(genre, spec["target"]) for genre, spec in genres.items()}
+    unsorted_key = add_target(UNMATCHED_LABEL, unsorted) if unsorted else None
+    keywords = {genre: spec["keywords"] for genre, spec in genres.items()}
 
     # --- read source and work out where each track goes
     progress("Reading the source playlist", 0, 0)
     try:
-        tracks = [track_summary(t) for t in sp.playlist_tracks(source_id)]
+        all_tracks = [track_summary(t) for t in sp.playlist_tracks(source_id)]
     except SpotifyError as e:
         if e.status in (403, 404):
             raise GenrefyError(
@@ -568,43 +723,48 @@ def build_plan(sp, lastfm, source, genre_map, unsorted_name, progress=None):
                 "this app read it (playlists you don't own or collaborate on are often blocked). "
                 "Copy its songs into a playlist of your own and use that instead.")
         raise
+    tracks = [t for t in all_tracks if passes_date_filters(t, filters)]
 
-    assigned = {name: [] for name in target_names}
+    assigned = {key: [] for key in targets}
     unmatched = []
     try:
         for i, track in enumerate(tracks, 1):
-            hits, seen_tags = match_genres(track["artists"], genre_map, lastfm.tags)
-            for name in hits:
-                assigned[name].append(track)
+            hits, seen_tags = match_genres(track["artists"], keywords, lastfm.tags)
+            for genre in hits:
+                assigned[genre_target[genre]].append(track)
             if not hits:
                 unmatched.append({**track, "tags": seen_tags})
-                if unsorted_name:
-                    assigned[unsorted_name].append(track)
+                if unsorted_key:
+                    assigned[unsorted_key].append(track)
             progress("Looking up genres on Last.fm", i, len(tracks))
             if i % 25 == 0:
                 lastfm.save()
     finally:
         lastfm.save()  # keep lookups even if interrupted
 
-    # --- skip songs already in each target
+    # --- skip songs already in each destination, including the same song under another ID
     results = []
-    for n, name in enumerate(target_names, 1):
-        progress("Checking your genre playlists", n, len(target_names))
-        playlist = targets[name]
-        existing = {t["uri"] for t in sp.playlist_tracks(playlist["id"])} if playlist else set()
-        by_uri = {t["uri"]: t for t in assigned[name]}
+    for n, (key, target) in enumerate(targets.items(), 1):
+        progress("Checking your genre playlists", n, len(targets))
+        playlist = target["playlist"]
+        existing = [track_summary(t) for t in sp.playlist_tracks(playlist["id"])] if playlist else []
+        fresh, same_song = new_tracks(assigned[key], existing)
         results.append({
-            "name": name,
+            "name": target["name"],
             "playlist_id": playlist["id"] if playlist else None,
-            "matched": len(by_uri),
-            "tracks": [by_uri[u] for u in new_uris(assigned[name], existing)],
+            "genres": target["genres"],
+            "matched": len({t["uri"] for t in assigned[key]}),
+            "tracks": fresh,
+            "same_song_skipped": same_song,
         })
 
     return {
         "user": me.get("display_name") or my_id,
         "source_id": source_id,
         "source_name": source_name,
+        "source_total": len(all_tracks),
         "total": len(tracks),
+        "filters": filters or {},
         "targets": results,
         "unmatched": unmatched,
     }
@@ -615,8 +775,8 @@ def apply_plan(sp, plan, report=print):
     so songs added since the plan was built aren't added twice."""
     for target in plan["targets"]:
         name, playlist_id = target["name"], target["playlist_id"]
-        existing = {t["uri"] for t in sp.playlist_tracks(playlist_id)} if playlist_id else set()
-        uris = new_uris(target["tracks"], existing)
+        existing = [track_summary(t) for t in sp.playlist_tracks(playlist_id)] if playlist_id else []
+        uris = [t["uri"] for t in new_tracks(target["tracks"], existing)[0]]
         if not uris:
             report(f"{name}: nothing new")
             continue
@@ -644,19 +804,25 @@ def main():
     parser.add_argument("source", help="Source playlist name, link, or ID")
     parser.add_argument("--dry-run", action="store_true", help="Preview without changing anything")
     parser.add_argument("--map", type=Path, default=MAP_FILE, help="Path to the genre map JSON")
+    dates = parser.add_argument_group("date filters (YYYY, YYYY-MM or YYYY-MM-DD; ranges are inclusive)")
+    dates.add_argument("--added-after", metavar="DATE", help="Only songs added to the source on/after DATE")
+    dates.add_argument("--added-before", metavar="DATE", help="Only songs added to the source on/before DATE")
+    dates.add_argument("--released-after", metavar="DATE", help="Only songs released on/after DATE")
+    dates.add_argument("--released-before", metavar="DATE", help="Only songs released on/before DATE")
     args = parser.parse_args()
 
     load_env()
     try:
-        genre_map, unsorted_name = load_genre_map(args.map)
+        args.filters = parse_date_filters({name: getattr(args, name) for name in DATE_FILTERS})
+        genres, unsorted = load_genre_map(args.map)
         sp = Spotify(SpotifyAuth())
         lastfm = LastFM()
-        run(sp, lastfm, args, genre_map, unsorted_name)
+        run(sp, lastfm, args, genres, unsorted)
     except GenrefyError as e:
         sys.exit(str(e))
 
 
-def run(sp, lastfm, args, genre_map, unsorted_name):
+def run(sp, lastfm, args, genres, unsorted):
     last_stage = None
 
     def progress(stage, done, total):
@@ -669,18 +835,26 @@ def run(sp, lastfm, args, genre_map, unsorted_name):
 
     me = sp.me()
     print(f"Signed in as {me.get('display_name') or me['id']}")
-    plan = build_plan(sp, lastfm, args.source, genre_map, unsorted_name, progress)
-    print(f"Source playlist has {plan['total']} songs.")
+    plan = build_plan(sp, lastfm, args.source, genres, unsorted, progress, args.filters)
+    print(f"Source playlist has {plan['source_total']} songs.")
+    if args.filters:
+        print(f"{plan['total']} of them pass the date filters.")
 
     print("\nResults:")
+    for target in plan["targets"]:
+        if target["same_song_skipped"]:
+            print(f"  {target['name']}: skipping {target['same_song_skipped']} songs already there under another version")
     if args.dry_run:
         for target in plan["targets"]:
             count = len(target["tracks"])
+            label = target["name"]
+            if target["genres"] != [label]:
+                label += f" ({', '.join(target['genres'])})"
             if not count:
-                print(f"  {target['name']}: nothing new")
+                print(f"  {label}: nothing new")
                 continue
             note = " (playlist would be created)" if not target["playlist_id"] else ""
-            print(f"  {target['name']}: would add {count} songs{note}")
+            print(f"  {label}: would add {count} songs{note}")
     else:
         apply_plan(sp, plan, report=lambda msg: print(f"  {msg}"))
 

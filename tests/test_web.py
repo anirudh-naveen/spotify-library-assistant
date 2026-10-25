@@ -46,9 +46,10 @@ def test_save_genre_config_validates_and_keeps_extra_keys(tmp_path):
     app = make_app(tmp_path)
     with pytest.raises(sbg.GenrefyError):
         app.save_genre_config({"playlists": {"Pop": []}})
-    app.save_genre_config({"_help": "keep me", "playlists": {"Rock": ["rock"]}, "unsorted_playlist": None})
-    saved = json.loads(app.map_path.read_text())
-    assert saved == {"_help": "keep me", "playlists": {"Rock": ["rock"]}, "unsorted_playlist": None}
+    config = {"_help": "keep me", "genres": {"Rock": {"keywords": ["rock"], "playlist": "Loud", "playlist_id": "x"}},
+              "unsorted_playlist": None}
+    app.save_genre_config(config)
+    assert json.loads(app.map_path.read_text()) == config
 
 
 def wait(app):

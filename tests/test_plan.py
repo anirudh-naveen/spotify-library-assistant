@@ -7,8 +7,12 @@ import sort_by_genre as sbg
 ME = "me"
 
 
-def track(uri, name, *artists):
-    return {"uri": f"spotify:track:{uri}", "name": name, "artists": [{"name": a} for a in artists]}
+def track(uri, name, *artists, added="2024-01-10T00:00:00Z", released="2020-05-01", isrc=None, length=200_000):
+    return {
+        "uri": f"spotify:track:{uri}", "name": name, "artists": [{"name": a} for a in artists],
+        "added_at": added, "album": {"release_date": released}, "duration_ms": length,
+        "external_ids": {"isrc": isrc} if isrc else {},
+    }
 
 
 class FakeSpotify:
@@ -68,8 +72,8 @@ def world():
         {"src": source, "edm": [{"uri": "spotify:track:d"}]},  # D is already in EDM
     )
     lastfm = FakeLastFM({"DJ": ["house"], "Singer": ["pop"], "Nobody": ["polka"]})
-    genre_map = {"EDM": {"house"}, "Pop": {"pop"}}
-    return sp, lastfm, genre_map
+    genres, _ = sbg.parse_genre_map({"genres": {"EDM": ["house"], "Pop": ["pop"]}})
+    return sp, lastfm, genres
 
 
 def uris(target):
@@ -94,7 +98,7 @@ def test_build_plan_dedupes_and_skips_existing(world):
 
 def test_build_plan_unsorted_playlist(world):
     sp, lastfm, genre_map = world
-    plan = sbg.build_plan(sp, lastfm, "Big Mix", genre_map, "Unsorted")
+    plan = sbg.build_plan(sp, lastfm, "Big Mix", genre_map, sbg.parse_target("Unsorted"))
     unsorted = next(t for t in plan["targets"] if t["name"] == "Unsorted")
     assert uris(unsorted) == ["c"]
 
@@ -139,3 +143,59 @@ def test_resolve_source_fills_name_for_ids():
     assert sbg.resolve_source(pid, by_name) == (pid, "Chill")
     with pytest.raises(sbg.GenrefyError):
         sbg.resolve_source("nope", by_name)
+
+
+def test_genres_can_share_a_chosen_playlist(world):
+    sp, lastfm, _ = world
+    sp.playlists.append(playlist("mix", "Everything Nice"))
+    sp.contents["mix"] = []
+    genres, _ = sbg.parse_genre_map({"genres": {
+        "EDM": {"keywords": ["house"], "playlist": "old name", "playlist_id": "mix"},
+        "Pop": {"keywords": ["pop"], "playlist": "Everything Nice"},
+    }})
+    plan = sbg.build_plan(sp, lastfm, "Big Mix", genres)
+    assert len(plan["targets"]) == 1
+    target = plan["targets"][0]
+    assert target["name"] == "Everything Nice"        # the playlist's current name, not the stored one
+    assert target["genres"] == ["EDM", "Pop"]
+    assert sorted(uris(target)) == ["a", "b", "d"]
+
+
+def test_new_playlist_with_custom_name(world):
+    sp, lastfm, _ = world
+    genres, _ = sbg.parse_genre_map({"genres": {"Pop": {"keywords": ["pop"], "playlist": "Bops"}}})
+    plan = sbg.build_plan(sp, lastfm, "Big Mix", genres)
+    sbg.apply_plan(sp, plan, report=lambda m: None)
+    assert sp.created == ["Bops"]
+
+
+def test_chosen_playlist_missing(world):
+    sp, lastfm, _ = world
+    genres, _ = sbg.parse_genre_map({"genres": {"Pop": {"keywords": ["pop"], "playlist_id": "deleted"}}})
+    with pytest.raises(sbg.GenrefyError, match="isn't in your library anymore"):
+        sbg.build_plan(sp, lastfm, "Big Mix", genres)
+
+
+def test_same_song_under_another_id_is_skipped(world):
+    sp, lastfm, genres = world
+    sp.contents["edm"].append(track("album-a", "Song A", "DJ", isrc="X1"))
+    sp.contents["src"].append(track("single-a", "Song A - Radio Edit", "DJ", isrc="X1"))
+    plan = sbg.build_plan(sp, lastfm, "Big Mix", genres)
+    edm = next(t for t in plan["targets"] if t["name"] == "EDM")
+    # "single-a" matches by ISRC; the source's plain "Song A" matches by title, artist and length
+    assert uris(edm) == []
+    assert edm["same_song_skipped"] == 2
+
+
+def test_date_filters_limit_the_source(world):
+    sp, lastfm, genres = world
+    sp.contents["src"] = [
+        track("old", "Old", "DJ", added="2020-01-01T00:00:00Z", released="2001"),
+        track("new", "New", "DJ", added="2025-06-01T00:00:00Z", released="2024-02-02"),
+    ]
+    filters = sbg.parse_date_filters({"added_after": "2025"})
+    plan = sbg.build_plan(sp, lastfm, "Big Mix", genres, filters=filters)
+    assert (plan["source_total"], plan["total"]) == (2, 1)
+    assert uris(next(t for t in plan["targets"] if t["name"] == "EDM")) == ["new"]
+    plan = sbg.build_plan(sp, lastfm, "Big Mix", genres, filters=sbg.parse_date_filters({"released_before": "2010"}))
+    assert uris(next(t for t in plan["targets"] if t["name"] == "EDM")) == ["old"]

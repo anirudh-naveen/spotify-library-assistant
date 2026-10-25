@@ -1,16 +1,91 @@
 {
-  "_help": "Each key is the EXACT name of a genre playlist in your Spotify library (it gets created if missing). Each list holds Last.fm tags that send a song there. A song can go to several playlists. Check unmatched.txt after a run to see tags you could add.",
-
-  "playlists": {
-    "EDM": ["edm", "electronic dance music", "dance", "house", "progressive house", "electro house", "big room", "dubstep", "trance", "future bass", "drum and bass"],
-    "Pop": ["pop", "dance pop", "electropop", "synthpop", "teen pop", "k pop"],
-    "Soft Pop": ["soft pop", "acoustic", "singer songwriter", "soft rock", "ballad", "chill"],
-    "Art Pop": ["art pop", "indie pop", "dream pop", "experimental pop", "alt pop"],
-    "Electronic": ["electronic", "electronica", "synthwave", "idm", "ambient", "downtempo"],
-    "Alternative Metal": ["alternative metal", "nu metal", "metalcore", "metal", "hard rock", "post hardcore"],
-    "Future Bass": ["future bass", "melodic dubstep", "chillstep"],
-    "Emo": ["emo", "pop punk", "emo rap", "midwest emo"]
+  "_help": "Each genre lists Last.fm tags (keywords). A song goes to every genre that has one of its artist's tags. A genre written as a plain list goes to a playlist with the same name. Use {\"keywords\": [...], \"playlist\": \"Any Name\"} to send it somewhere else; several genres can share a playlist. The web UI can pick playlists for you. Check unmatched.txt after a run for tags you could add.",
+  "genres": {
+    "EDM": {
+      "keywords": [
+        "edm",
+        "electronic dance music",
+        "dance",
+        "house",
+        "progressive house",
+        "electro house",
+        "big room",
+        "dubstep",
+        "trance",
+        "future bass",
+        "drum and bass"
+      ],
+      "playlist": "EDM",
+      "playlist_id": "1TTFxYXso6BlOUjjciVRto"
+    },
+    "Pop": {
+      "keywords": [
+        "pop",
+        "dance pop",
+        "electropop",
+        "synthpop",
+        "teen pop",
+        "k pop"
+      ],
+      "playlist": "Pop",
+      "playlist_id": "4eocvOuS19g8BBJlUYyWji"
+    },
+    "Soft Pop": {
+      "keywords": [
+        "soft pop",
+        "acoustic",
+        "singer songwriter",
+        "soft rock",
+        "ballad",
+        "chill"
+      ],
+      "playlist": "Pop",
+      "playlist_id": "4eocvOuS19g8BBJlUYyWji"
+    },
+    "Art Pop": {
+      "keywords": [
+        "art pop",
+        "indie pop",
+        "dream pop",
+        "experimental pop",
+        "alt pop"
+      ],
+      "playlist": "Pop",
+      "playlist_id": "4eocvOuS19g8BBJlUYyWji"
+    },
+    "Electronic": {
+      "keywords": [
+        "electronic",
+        "electronica",
+        "synthwave",
+        "idm",
+        "ambient",
+        "downtempo"
+      ],
+      "playlist": "EDM",
+      "playlist_id": "1TTFxYXso6BlOUjjciVRto"
+    },
+    "Alternative Metal": {
+      "keywords": [
+        "alternative metal",
+        "nu metal",
+        "metalcore",
+        "metal",
+        "hard rock",
+        "post hardcore"
+      ],
+      "playlist": "Rocks & Metals",
+      "playlist_id": "7iKe3tpD7BsJ4tz9KvV8qp"
+    },
+    "Future Bass": {
+      "keywords": [
+        "future bass",
+        "melodic dubstep",
+        "chillstep"
+      ],
+      "playlist": "EDM",
+      "playlist_id": "1TTFxYXso6BlOUjjciVRto"
+    }
   },
-
   "unsorted_playlist": null
 }

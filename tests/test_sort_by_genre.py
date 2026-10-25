@@ -127,9 +127,91 @@ def test_no_artists():
 
 # ---------------------------------------------------------------- dedupe / ownership / genre map
 
-def test_new_uris_skips_existing_and_duplicates():
-    tracks = [{"uri": u} for u in ["a", "b", "a", "c", "b"]]
-    assert sbg.new_uris(tracks, existing={"c"}) == ["a", "b"]
+def summary(uri, name="Song", artist="Artist", isrc=None, duration_ms=200_000):
+    return sbg.track_summary({
+        "uri": f"spotify:track:{uri}", "name": name, "artists": [{"name": artist}],
+        "external_ids": {"isrc": isrc} if isrc else {}, "duration_ms": duration_ms,
+    })
+
+
+def test_new_tracks_drops_repeats_quietly():
+    tracks = [summary("a", "A"), summary("b", "B"), summary("a", "A"), summary("c", "C")]
+    fresh, same = sbg.new_tracks(tracks, existing=[summary("c", "C")])
+    assert [t["uri"] for t in fresh] == ["spotify:track:a", "spotify:track:b"]
+    assert same == 0
+
+
+def test_new_tracks_same_recording_by_isrc():
+    single = summary("single", "Totally Different Title", isrc="usabc1234567")
+    album = summary("album", "Song", isrc="USABC1234567")
+    fresh, same = sbg.new_tracks([single], existing=[album])
+    assert fresh == [] and same == 1
+
+
+def test_new_tracks_same_title_artist_and_length():
+    existing = [summary("album", "Song (feat. Someone)", duration_ms=200_000)]
+    remaster = summary("remaster", "Song - 2011 Remaster", duration_ms=201_500)
+    live = summary("live", "Song - Live", duration_ms=200_000)
+    other_intro = summary("intro2", "Song", duration_ms=95_000)  # same title, clearly a different track
+    fresh, same = sbg.new_tracks([remaster, live, other_intro], existing)
+    assert [t["uri"].split(":")[-1] for t in fresh] == ["live", "intro2"]
+    assert same == 1
+
+
+@pytest.mark.parametrize("title, expected", [
+    ("Song (feat. X)", "song|artist"),
+    ("Song [Remastered 2009]", "song|artist"),
+    ("Song - 2011 Remaster", "song|artist"),
+    ("Song (with Halsey)", "song|artist"),
+    ("Song - Radio Edit", "song|artist"),
+    ("Song - Live", "song live|artist"),
+    ("Song (Remix)", "song remix|artist"),
+    ("!!!", "!!!|artist"),
+])
+def test_song_key(title, expected):
+    assert sbg.song_key(title, ["Artist"]) == expected
+
+
+def test_song_key_needs_an_artist():
+    assert sbg.song_key("Song", []) == ""
+
+
+# ---------------------------------------------------------------- date filters
+
+@pytest.mark.parametrize("value, end, expected", [
+    ("2019", False, "2019-01-01"),
+    ("2019", True, "2019-12-31"),
+    ("2019-05", True, "2019-05-31"),
+    ("2019-05-03", True, "2019-05-03"),
+    ("", False, ""),
+])
+def test_date_bound(value, end, expected):
+    assert sbg.date_bound(value, end) == expected
+
+
+@pytest.mark.parametrize("bad", ["19", "2019/05/01", "May 2019"])
+def test_date_bound_rejects(bad):
+    with pytest.raises(sbg.GenrefyError):
+        sbg.date_bound(bad)
+
+
+def test_parse_date_filters():
+    assert sbg.parse_date_filters({"added_after": "2024", "released_before": "2010", "released_after": ""}) == {
+        "added_after": "2024-01-01", "released_before": "2010-12-31"}
+    with pytest.raises(sbg.GenrefyError, match="ends before it starts"):
+        sbg.parse_date_filters({"added_after": "2024-06-01", "added_before": "2024-01-01"})
+
+
+def test_passes_date_filters():
+    t = {"added_at": "2024-03-15T10:00:00Z", "release_date": "2019"}
+    f = sbg.parse_date_filters
+    assert sbg.passes_date_filters(t, {})
+    assert sbg.passes_date_filters(t, f({"added_after": "2024-03-15", "added_before": "2024-03"}))
+    assert not sbg.passes_date_filters(t, f({"added_after": "2024-03-16"}))
+    assert sbg.passes_date_filters(t, f({"released_after": "2019-06"}))      # year-only 2019 overlaps
+    assert not sbg.passes_date_filters(t, f({"released_after": "2020"}))
+    assert not sbg.passes_date_filters(t, f({"released_before": "2018"}))
+    assert not sbg.passes_date_filters({"added_at": None}, f({"added_after": "2000"}))  # unknown date
 
 
 def test_index_by_name_prefers_editable_playlist():
@@ -142,25 +224,50 @@ def test_index_by_name_prefers_editable_playlist():
     assert set(by_name) == {"pop", "edm"}
 
 
-def test_load_genre_map_normalizes(tmp_path):
+def test_load_genre_map_old_format(tmp_path):
     path = tmp_path / "map.json"
     path.write_text(json.dumps({
         "_help": "ignored",
         "playlists": {"Pop": ["K-Pop", "Pop"], "Jazz": "jazz"},
         "unsorted_playlist": "  ",
     }))
-    playlists, unsorted = sbg.load_genre_map(path)
-    assert playlists == {"Pop": {"k pop", "pop"}, "Jazz": {"jazz"}}
+    genres, unsorted = sbg.load_genre_map(path)
+    assert genres == {
+        "Pop": {"keywords": {"k pop", "pop"}, "target": {"playlist_id": None, "playlist": "Pop"}},
+        "Jazz": {"keywords": {"jazz"}, "target": {"playlist_id": None, "playlist": "Jazz"}},
+    }
     assert unsorted is None
 
 
-def test_load_genre_map_rejects_empty_keywords(tmp_path):
-    path = tmp_path / "map.json"
-    path.write_text(json.dumps({"playlists": {"Pop": []}}))
+def test_parse_genre_map_custom_playlists():
+    genres, unsorted = sbg.parse_genre_map({
+        "genres": {
+            "EDM": {"keywords": ["house"], "playlist": "Club Bangers", "playlist_id": "abc"},
+            "Future Bass": {"keywords": ["future bass"], "playlist": "Club Bangers"},
+            "Rock": {"keywords": ["rock"]},   # no playlist given: named after the genre
+        },
+        "playlists": {"Ignored": ["x"]},    # "genres" wins over the old key
+        "unsorted_playlist": {"playlist": "Misc", "playlist_id": "zzz"},
+    })
+    assert genres["EDM"]["target"] == {"playlist_id": "abc", "playlist": "Club Bangers"}
+    assert genres["Future Bass"]["target"] == {"playlist_id": None, "playlist": "Club Bangers"}
+    assert genres["Rock"]["target"] == {"playlist_id": None, "playlist": "Rock"}
+    assert "Ignored" not in genres
+    assert unsorted == {"playlist_id": "zzz", "playlist": "Misc"}
+
+
+@pytest.mark.parametrize("config", [
+    {"genres": {"Pop": []}},
+    {"genres": {"Pop": {"keywords": []}}},
+    {"genres": {}},
+    {"genres": ["pop"]},
+    [],
+])
+def test_parse_genre_map_rejects(config):
     with pytest.raises(sbg.GenrefyError):
-        sbg.load_genre_map(path)
+        sbg.parse_genre_map(config)
 
 
 def test_bundled_genre_map_loads():
-    playlists, _ = sbg.load_genre_map(sbg.MAP_FILE)
-    assert "EDM" in playlists
+    genres, _ = sbg.load_genre_map(sbg.MAP_FILE)
+    assert "EDM" in genres

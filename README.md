@@ -87,11 +87,14 @@ http://127.0.0.1:8888 in your browser. From there you can:
 
 - log in to Spotify
 - pick a source playlist from your library, or paste a link
-- preview which songs would go to which genre playlist, with live progress
+- optionally filter the source by date: when songs were added to it, or when
+  they were released
+- preview which songs would go to which playlist, with live progress
 - click **Add songs** to apply the preview
 - see the songs that matched nothing along with their Last.fm tags. Click a tag
-  to add it as a keyword for a genre playlist.
-- edit `genre_map.json` in the **Genre map** tab
+  to add it as a keyword for a genre.
+- edit your genres in the **Genre map** tab, and pick the playlist each genre goes
+  to: one you already own, or a new one with any name
 
 The server only answers requests from that page on your own computer. It uses
 the same address as the Spotify redirect URI, so stop it (Ctrl+C) before using
@@ -123,6 +126,21 @@ python sort_by_genre.py https://open.spotify.com/playlist/37i9dQZF1DXcBWIGoYBM5M
 
 Use a different genre map with `--map path/to/map.json`.
 
+Only sort some of the source's songs with the date filters. Each takes `YYYY`,
+`YYYY-MM` or `YYYY-MM-DD`, and ranges include both ends:
+
+```bash
+python sort_by_genre.py "My Big Playlist" --added-after 2025-01-01 --dry-run
+```
+
+```bash
+python sort_by_genre.py "My Big Playlist" --released-after 2010 --released-before 2019
+```
+
+`--added-after` and `--added-before` use the date a song was added to the source
+playlist. `--released-after` and `--released-before` use its album's release date.
+A song with no known date is left out when that date is filtered.
+
 The first run opens your browser to log in to Spotify. The token is cached in
 `.spotify_token.json` and refreshed automatically after that. Last.fm lookups are
 cached in `lastfm_cache.json`, so later runs only query new artists. Delete that
@@ -130,27 +148,39 @@ file to fetch fresh tags.
 
 ## Editing `genre_map.json`
 
+The easiest way to edit it is the web UI's **Genre map** tab. The file looks
+like this:
+
 ```json
 {
-  "playlists": {
-    "EDM": ["edm", "house", "dubstep", "drum and bass"],
-    "Pop": ["pop", "dance pop", "k pop"]
+  "genres": {
+    "Pop": ["pop", "dance pop", "k pop"],
+    "EDM": { "keywords": ["edm", "house", "dubstep"], "playlist": "Club Bangers" },
+    "Future Bass": { "keywords": ["future bass"], "playlist": "Club Bangers" }
   },
   "unsorted_playlist": null
 }
 ```
 
-- Each key under `playlists` is the exact name of a playlist in your library.
-  The match is case-insensitive. If a playlist doesn't exist yet, Genrefy creates
-  it as a private playlist.
-- Each value is a list of Last.fm tags that send a song to that playlist. A song
-  matches when one of its artist's top tags equals a keyword. Tags are compared
-  whole, so `pop` doesn't match `k pop`.
+- Each key under `genres` is a genre name. It's only a label.
+- A genre written as a plain list of keywords goes to the playlist with the same
+  name, like `Pop` above.
+- To send a genre to a playlist with a different name, use an object with
+  `keywords` and `playlist`, like `EDM` above. Several genres can share a
+  playlist. The web UI also stores the playlist's ID (`"playlist_id"`), so
+  renaming the playlist in Spotify doesn't break anything.
+- Playlist names are matched case-insensitively against playlists you own. If
+  there's no match, Genrefy creates a private playlist with that name.
+- Keywords are Last.fm tags. A song joins a genre when one of its artist's top
+  tags equals a keyword. Tags are compared whole, so `pop` doesn't match `k pop`.
+- Older files that use `"playlists"` instead of `"genres"` still work. Saving
+  from the web UI converts them.
 - Tags and keywords are normalized before they're compared: lowercase,
   `-`/`_` become spaces, `&` becomes `and`. That makes `K-Pop` equal `k pop` and
   `Drum & Bass` equal `drum and bass`.
-- Set `unsorted_playlist` to a playlist name, for example `"Unsorted"`, to collect
-  songs that matched nothing. Leave it `null` to skip that.
+- Set `unsorted_playlist` to a playlist name, for example `"Unsorted"`, or a
+  `{"playlist": ..., "playlist_id": ...}` object, to collect songs that matched
+  nothing. Leave it `null` to skip that.
 - Any top-level key starting with `_` (like `_help`) is ignored, so you can use
   it for notes.
 
@@ -169,18 +199,22 @@ After a run, check `unmatched.txt` for tags you could add as keywords.
   `favorites`), and lesser-known artists may have none.
 - **Name collisions.** Last.fm looks artists up by name, so two artists who share
   a name get the same tags.
-- **Duplicates are matched by Spotify track ID.** The same song from a different
-  release (single, album, deluxe edition) has a different ID and can be added
-  twice.
+- **Same-song detection is best effort.** Besides exact track IDs, Genrefy treats
+  two tracks as the same song if they share an ISRC (the recording's industry
+  ID), or if they have the same title and main artist and lengths within 4
+  seconds. Title extras like "(feat. X)", "- 2011 Remaster" or "- Radio Edit" are
+  ignored for this. Live, remix and acoustic versions count as different songs,
+  and a radio edit that's much shorter than the album version can still be added
+  next to it.
 - **Add-only.** Removing a song from the source doesn't remove it from the genre
   playlists, and editing `genre_map.json` doesn't move songs that were already
   sorted.
 - **Local files and podcast episodes are skipped.** The Web API can't add them to
   playlists.
 - **Your own playlists only.** Genrefy can only add to playlists you own or that
-  are collaborative. If a playlist you only follow has the same name as a genre,
-  Genrefy uses your own playlist when you have one, and otherwise stops so you can
-  rename the genre. Spotify may also refuse to let the app read a source playlist
+  are collaborative. If a playlist you only follow has the same name as a genre's
+  playlist, Genrefy uses your own playlist when you have one, and otherwise stops
+  so you can pick a different playlist. Spotify may also refuse to let the app read a source playlist
   you don't own; copy its songs into your own playlist first.
 - **API changes.** Genrefy targets Spotify's February 2026 Web API
   (`/playlists/{id}/items`, `POST /me/playlists`). Older or future API versions

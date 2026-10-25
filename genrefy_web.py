@@ -117,16 +117,17 @@ class App:
         threading.Thread(target=target, daemon=True).start()
         return self.job_state()
 
-    def start_preview(self, source):
+    def start_preview(self, source, filters=None):
         if not source.strip():
             raise core.GenrefyError("Pick a source playlist first.")
-        genre_map, unsorted = core.load_genre_map(self.map_path)
+        filters = core.parse_date_filters(filters if isinstance(filters, dict) else {})
+        genres, unsorted = core.load_genre_map(self.map_path)
 
         def work(job):
             def progress(stage, done, total):
                 job["stage"], job["done"], job["total"] = stage, done, total
 
-            plan = core.build_plan(self.sp, self.lastfm, source, genre_map, unsorted, progress)
+            plan = core.build_plan(self.sp, self.lastfm, source, genres, unsorted, progress, filters)
             plan["id"] = secrets.token_hex(8)
             plan["applied"] = False
             core.write_unmatched(plan["unmatched"])
@@ -226,7 +227,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
     def do_POST(self):
         self._handle({
-            "/api/preview": lambda q: self._json(self.app.start_preview(str(self._body().get("source", "")))),
+            "/api/preview": lambda q: self._json(self._preview(self._body())),
             "/api/apply": lambda q: self._json(self.app.start_apply(str(self._body().get("plan_id", "")))),
             "/api/logout": lambda q: (self.app.logout(), self._json({"ok": True})),
         }, write=True)
@@ -237,6 +238,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
         }, write=True)
 
     # --- routes
+
+    def _preview(self, body):
+        return self.app.start_preview(str(body.get("source", "")), body.get("filters"))
 
     def status(self):
         user = self.app.current_user()

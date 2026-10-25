@@ -97,7 +97,7 @@
     outline: 2px solid var(--accent); outline-offset: 2px;
   }
 
-  input[type=text], select {
+  input[type=text], input[type=date], select {
     border: 1px solid var(--border); background: var(--surface); border-radius: 8px;
     padding: 8px 12px; min-width: 0;
   }
@@ -117,6 +117,12 @@
   .source-row input { flex: 1 1 220px; }
   .or { color: var(--muted); font-size: 13px; }
 
+  .filters { margin-top: 14px; }
+  .filters summary { font-size: 14px; color: var(--text); font-weight: 600; margin: 0; }
+  .filter-grid { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 10px 16px; align-items: center; margin-top: 12px; }
+  .filter-grid > span { font-size: 14px; }
+  .range { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .range input { flex: 1 1 140px; max-width: 200px; }
   .banner { border-radius: 10px; padding: 12px 14px; margin-top: 16px; white-space: pre-wrap; }
   .banner.error { background: var(--bad-soft); color: var(--bad); }
   .banner.ok { background: var(--good-soft); color: var(--good); }
@@ -136,6 +142,7 @@
   .target { padding: 16px; margin: 0 !important; }
   .target-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
   .target-name { font-weight: 700; overflow-wrap: anywhere; }
+  .from { color: var(--muted); font-size: 13px; overflow-wrap: anywhere; }
   .count { font-variant-numeric: tabular-nums; font-weight: 700; color: var(--accent); white-space: nowrap; }
   .count.zero { color: var(--muted); font-weight: 500; }
   .badge {
@@ -167,8 +174,11 @@
   }
   .applybar-inner { max-width: 1040px; margin: 0 auto; padding: 12px 16px; display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
 
-  .map-row { display: grid; grid-template-columns: minmax(140px, 220px) minmax(0, 1fr) auto; gap: 12px; align-items: start; padding: 12px 0; border-top: 1px solid var(--border); }
-  .map-row:first-child { border-top: 0; }
+  .map-row { display: grid; grid-template-columns: minmax(120px, 180px) minmax(0, 1fr) minmax(170px, 230px) auto; gap: 12px; align-items: start; padding: 12px 0; border-top: 1px solid var(--border); }
+  .map-head { color: var(--muted); font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; border-top: 0; padding-bottom: 0; }
+  .target-pick { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+  .target-pick select, .target-pick input { width: 100%; }
+  .unsorted-pick { width: min(100%, 320px); }
   .map-row .chips input { border: 1px dashed var(--border); background: none; border-radius: 999px; padding: 2px 10px; font-size: 13px; width: 140px; }
   .map-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 16px; }
   .field { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 16px; }
@@ -192,6 +202,9 @@
   @media (max-width: 640px) {
     header { padding: 12px 16px; }
     .unmatched-row, .map-row { grid-template-columns: 1fr; }
+    .map-head { display: none; }
+    .filter-grid { grid-template-columns: 1fr; }
+    .target-pick::before { content: "Goes to"; color: var(--muted); font-size: 12px; font-weight: 600; }
     .map-row > .btn { justify-self: start; }
     .user .who { display: none; }
   }
@@ -236,6 +249,25 @@
           <input type="text" id="source-link" placeholder="Paste a playlist link" aria-label="Playlist link">
           <button class="btn primary" id="preview-btn">Preview</button>
         </div>
+        <details class="filters" id="filters">
+          <summary>Filter by date <span id="filter-note" class="muted small"></span></summary>
+          <div class="filter-grid">
+            <span>Added to the playlist</span>
+            <div class="range">
+              <input type="date" id="added_after" aria-label="Added on or after">
+              <span class="muted small">to</span>
+              <input type="date" id="added_before" aria-label="Added on or before">
+            </div>
+            <span>Released</span>
+            <div class="range">
+              <input type="text" id="released_after" placeholder="e.g. 2010" inputmode="numeric" aria-label="Released on or after (year or date)">
+              <span class="muted small">to</span>
+              <input type="text" id="released_before" placeholder="e.g. 2019-06" inputmode="numeric" aria-label="Released on or before (year or date)">
+            </div>
+          </div>
+          <p class="muted small" style="margin:10px 0 0">Leave a box empty for no limit. Ranges include both ends. Release dates can be a year (2015), a month (2015-06) or a full date.
+            <button class="btn sm ghost" id="clear-filters" type="button">Clear dates</button></p>
+        </details>
         <p class="muted small" style="margin:10px 0 0">Preview doesn't change anything in Spotify. You'll see exactly what will be added first.</p>
         <div id="progress" class="progress" hidden>
           <div class="small"><span id="progress-stage"></span> <span id="progress-count" class="muted"></span></div>
@@ -263,15 +295,16 @@
 
     <div id="map-panel" role="tabpanel" hidden>
       <div class="card">
-        <h2>Genre playlists</h2>
-        <p class="muted small" style="margin-top:-6px">A song goes to every playlist that has one of its artist's Last.fm tags as a keyword. Playlists that don't exist yet are created as private playlists.</p>
+        <h2>Genres</h2>
+        <p class="muted small" style="margin-top:-6px">A song joins a genre when one of its artist's Last.fm tags is in that genre's keywords. Each genre goes to the playlist you pick: one you own, or a new private playlist with any name. Several genres can share a playlist, and the same song is never added twice.</p>
+        <div class="map-row map-head" aria-hidden="true"><div>Genre</div><div>Last.fm tags</div><div>Goes to</div><div></div></div>
         <div id="map-rows"></div>
         <div class="map-actions">
-          <button class="btn" id="add-playlist-btn">+ Add playlist</button>
+          <button class="btn" id="add-playlist-btn">+ Add genre</button>
         </div>
         <div class="field">
-          <label for="unsorted-input"><b>Unsorted playlist</b> <span class="muted small">(optional, for songs that match nothing)</span></label>
-          <input type="text" id="unsorted-input" placeholder="Leave blank to skip">
+          <div><b>Songs that match nothing</b> <span class="muted small">(optional)</span></div>
+          <div id="unsorted-pick" class="unsorted-pick"></div>
         </div>
         <div id="map-error" class="banner error" hidden></div>
         <div class="map-actions">
@@ -292,10 +325,10 @@
 
 <dialog id="tag-dialog">
   <h2 id="tag-dialog-title" style="margin-bottom:4px"></h2>
-  <p class="muted small" style="margin:0">Pick the genre playlist this tag should send songs to.</p>
+  <p class="muted small" style="margin:0">Pick the genre this tag belongs to.</p>
   <div class="pick" id="tag-dialog-pick"></div>
   <div class="dialog-new">
-    <input type="text" id="tag-dialog-new" placeholder="Or a new playlist name">
+    <input type="text" id="tag-dialog-new" placeholder="Or a new genre name">
     <button class="btn" id="tag-dialog-create">Add</button>
   </div>
   <div style="text-align:right;margin-top:16px"><button class="btn ghost" id="tag-dialog-cancel">Cancel</button></div>
@@ -307,7 +340,7 @@
 "use strict";
 
 const $ = (id) => document.getElementById(id);
-const state = { user: null, playlists: [], plan: null, config: null, rows: [], unsorted: "", dirty: false, polling: null };
+const state = { user: null, playlists: [], plan: null, config: null, rows: [], unsorted: null, dirty: false, polling: null };
 
 // ---------------------------------------------------------------- helpers
 
@@ -383,7 +416,8 @@ async function showApp() {
   $("app-view").hidden = false;
   $("user-area").hidden = false;
   $("user-name").textContent = state.user.name;
-  await Promise.all([loadPlaylists(), loadGenreMap()]);
+  await loadPlaylists();
+  await loadGenreMap();
 }
 
 function selectTab(which) {
@@ -426,7 +460,7 @@ async function startPreview() {
   if (!source) { show($("sort-error"), "Choose a playlist or paste a link first."); return; }
   if (state.dirty && !confirm("You have unsaved genre map changes. Preview with the saved version?")) return;
   try {
-    const job = await api("POST", "/api/preview", { source });
+    const job = await api("POST", "/api/preview", { source, filters: dateFilters() });
     trackJob(job);
   } catch (err) {
     if (!handleAuthError(err)) show($("sort-error"), err.message);
@@ -447,6 +481,19 @@ async function startApply() {
   } catch (err) {
     if (!handleAuthError(err)) show($("sort-error"), err.message);
   }
+}
+
+const FILTER_IDS = ["added_after", "added_before", "released_after", "released_before"];
+
+function dateFilters() {
+  const filters = {};
+  for (const id of FILTER_IDS) if ($(id).value.trim()) filters[id] = $(id).value.trim();
+  return filters;
+}
+
+function updateFilterNote() {
+  const n = Object.keys(dateFilters()).length;
+  $("filter-note").textContent = n ? `· ${n} set` : "";
 }
 
 function trackJob(job) {
@@ -491,7 +538,7 @@ function finishJob(job) {
     show($("apply-done"), "Done. " + job.log.join(" · "));
     if (state.plan) state.plan.applied = true;
     renderPlan();
-    loadPlaylists();
+    loadPlaylists().then(() => { if (!state.dirty) loadGenreMap(); });  // new playlists now exist
   }
 }
 
@@ -513,11 +560,15 @@ function renderPlan() {
   const { songs, playlists, creates } = planTotals(plan);
   const source = plan.source_name ? `“${plan.source_name}”` : "your playlist";
   $("results-title").textContent = plan.applied ? `Applied: ${source}` : `Preview: ${source}`;
+  const filtered = plan.filters && Object.keys(plan.filters).length;
   $("stats").replaceChildren(
-    stat(plan.total, "songs in source"),
+    filtered
+      ? stat(plan.total, `of ${plural(plan.source_total, "song")} pass the date filters`)
+      : stat(plan.total, "songs in source"),
     stat(songs, plan.applied ? "songs added" : "songs to add"),
     stat(playlists, "playlists getting songs"),
     stat(creates, "new playlists"),
+    stat(plan.targets.reduce((n, t) => n + (t.same_song_skipped || 0), 0), "same songs skipped"),
     stat(plan.unmatched.length, "unmatched songs"),
   );
 
@@ -528,7 +579,10 @@ function renderPlan() {
       h("div", { class: "target-head" },
         h("div", { class: "target-name" }, t.name),
         h("div", { class: "count" + (n ? "" : " zero") }, n ? `+${n.toLocaleString()}` : "nothing new")),
-      h("div", { class: "muted small" }, `${plural(t.matched, "song")} match`),
+      t.genres && (t.genres.length > 1 || t.genres[0] !== t.name)
+        ? h("div", { class: "from" }, "From " + t.genres.join(", ")) : null,
+      h("div", { class: "muted small" }, `${plural(t.matched, "song")} match`
+        + (t.same_song_skipped ? ` · ${plural(t.same_song_skipped, "same song")} skipped` : "")),
       !t.playlist_id && n ? h("span", { class: "badge" }, plan.applied ? "created" : "will be created") : null,
       n ? h("details", {},
         h("summary", {}, "Show songs"),
@@ -548,7 +602,7 @@ function stat(value, label) {
 
 function keywordOwners() {
   const owners = new Map();
-  for (const row of state.rows) for (const k of row.keywords) owners.set(normTag(k), row.name);
+  for (const row of state.rows) for (const k of row.keywords) owners.set(normTag(k), row.genre);
   return owners;
 }
 
@@ -563,7 +617,7 @@ function renderUnmatched() {
               const owner = owners.get(tag);
               return h("button", {
                 class: "chip" + (owner ? " added" : ""),
-                title: owner ? `Already a keyword for ${owner}` : "Add this tag to a genre playlist",
+                title: owner ? `Already a keyword for ${owner}` : "Add this tag to a genre",
                 onclick: () => openTagDialog(tag),
               }, tag, owner ? ` → ${owner}` : "");
             })
@@ -591,7 +645,7 @@ function openTagDialog(tag) {
   $("tag-dialog-title").textContent = `Add tag “${tag}”`;
   $("tag-dialog-new").value = "";
   $("tag-dialog-pick").replaceChildren(...state.rows.map((row) =>
-    h("button", { class: "btn sm", onclick: () => addTagTo(row.name) }, row.name)));
+    h("button", { class: "btn sm", onclick: () => addTagTo(row.genre) }, row.genre)));
   $("tag-dialog").showModal();
 }
 
@@ -605,12 +659,13 @@ async function addTagTo(name) {
     selectTab("map");
     return;
   }
-  let row = state.rows.find((r) => r.name.toLowerCase() === name.toLowerCase());
-  if (!row) { row = { name, keywords: [] }; state.rows.push(row); }
+  let row = state.rows.find((r) => r.genre.toLowerCase() === name.toLowerCase());
+  if (!row) { row = { genre: name, keywords: [], ...targetFromConfig(null, name) }; state.rows.push(row); }
   if (!row.keywords.some((k) => normTag(k) === tag)) row.keywords.push(tag);
   try {
     await saveGenreMap();
-    toast(`Added “${tag}” to ${row.name}. Preview again to sort those songs.`);
+    renderMap();
+    toast(`Added “${tag}” to ${row.genre}. Preview again to sort those songs.`);
   } catch (err) {
     toast(err.message);
     await loadGenreMap();
@@ -627,11 +682,62 @@ async function loadGenreMap() {
     if (!handleAuthError(err)) show($("map-error"), err.message);
     return;
   }
-  const playlists = state.config.playlists || {};
-  state.rows = Object.entries(playlists).map(([name, kws]) => ({ name, keywords: [].concat(kws || []) }));
-  state.unsorted = state.config.unsorted_playlist || "";
+  // "genres" is the current format; "playlists" is the original one (a keyword list per playlist name)
+  const raw = state.config.genres || state.config.playlists || {};
+  state.rows = Object.entries(raw).map(([genre, value]) => {
+    const isSpec = value && typeof value === "object" && !Array.isArray(value);
+    return { genre, keywords: [].concat((isSpec ? value.keywords : value) || []), ...targetFromConfig(isSpec ? value : null, genre) };
+  });
+  const unsorted = state.config.unsorted_playlist;
+  state.unsorted = unsorted ? targetFromConfig(unsorted, "Unsorted") : { target: "", newName: "Unsorted" };
   setDirty(false);
   renderMap();
+}
+
+const editablePlaylists = () => state.playlists.filter((p) => p.editable);
+
+// A row's destination is "id:<playlist id>" for a playlist you own, "new" to create one, or "" for none.
+function targetFromConfig(value, fallbackName) {
+  let name = "", id = null;
+  if (value && typeof value === "object") { name = (value.playlist || "").trim(); id = value.playlist_id || null; }
+  else if (typeof value === "string") name = value.trim();
+  if (!name && !id) name = fallbackName;
+  if (id) return { target: "id:" + id, newName: name };
+  const existing = editablePlaylists().find((p) => p.name.trim().toLowerCase() === name.toLowerCase());
+  return existing ? { target: "id:" + existing.id, newName: name } : { target: "new", newName: name };
+}
+
+function targetToConfig(row) {
+  if (row.target.startsWith("id:")) {
+    const id = row.target.slice(3);
+    const p = state.playlists.find((x) => x.id === id);
+    return { playlist: p ? p.name : row.newName, playlist_id: id };
+  }
+  return { playlist: row.newName.trim() };
+}
+
+function targetPicker(row, label, allowNone) {
+  const select = h("select", { "aria-label": label });
+  if (allowNone) select.append(h("option", { value: "" }, "Leave them out"));
+  select.append(h("option", { value: "new" }, "New playlist…"));
+  const mine = editablePlaylists();
+  if (mine.length) select.append(h("optgroup", { label: "Your playlists" }, mine.map((p) => h("option", { value: "id:" + p.id }, p.name))));
+  if (row.target.startsWith("id:") && !mine.some((p) => "id:" + p.id === row.target)) {
+    select.append(h("option", { value: row.target }, `${row.newName || "Playlist"} (not in your library)`));
+  }
+  select.value = row.target;
+  const input = h("input", { type: "text", placeholder: "New playlist name", value: row.newName, "aria-label": "New playlist name" });
+  input.hidden = row.target !== "new";
+  select.onchange = () => {
+    row.target = select.value;
+    input.hidden = row.target !== "new";
+    if (row.target === "new") input.focus();
+    setDirty(true);
+  };
+  input.oninput = () => { row.newName = input.value; setDirty(true); };
+  const pick = h("div", { class: "target-pick" }, select, input);
+  pick.nameInput = input;
+  return pick;
 }
 
 function setDirty(dirty) {
@@ -642,10 +748,10 @@ function setDirty(dirty) {
 
 function renderMap() {
   show($("map-error"));
-  $("unsorted-input").value = state.unsorted;
+  $("unsorted-pick").replaceChildren(targetPicker(state.unsorted, "Where songs that match nothing go", true));
   $("map-rows").replaceChildren(...state.rows.map((row, i) => {
     const add = h("input", {
-      type: "text", placeholder: "+ keyword", "aria-label": `Add keyword to ${row.name}`,
+      type: "text", placeholder: "+ keyword", "aria-label": `Add keyword to ${row.genre}`,
       onkeydown: (e) => {
         if (e.key !== "Enter" && e.key !== ",") return;
         e.preventDefault();
@@ -654,16 +760,22 @@ function renderMap() {
           row.keywords.push(value);
           setDirty(true);
           renderMap();
-          document.querySelectorAll(".map-row")[i].querySelector(".chips input").focus();
+          document.querySelectorAll("#map-rows .map-row")[i].querySelector(".chips input").focus();
         } else {
           add.value = "";
         }
       },
     });
+    const pick = targetPicker(row, `Playlist for ${row.genre || "this genre"}`);
     return h("div", { class: "map-row" },
       h("input", {
-        type: "text", value: row.name, "aria-label": "Playlist name",
-        oninput: (e) => { row.name = e.target.value; setDirty(true); },
+        type: "text", value: row.genre, placeholder: "Genre name", "aria-label": "Genre name",
+        oninput: (e) => {
+          // a not-yet-created playlist named after the genre follows the rename
+          if (row.target === "new" && row.newName === row.genre) row.newName = pick.nameInput.value = e.target.value;
+          row.genre = e.target.value;
+          setDirty(true);
+        },
       }),
       h("div", { class: "chips" },
         row.keywords.map((k, j) => h("span", { class: "chip static" }, k,
@@ -672,8 +784,9 @@ function renderMap() {
             onclick: () => { row.keywords.splice(j, 1); setDirty(true); renderMap(); },
           }, "×"))),
         add),
+      pick,
       h("button", {
-        class: "btn sm ghost danger", title: `Remove ${row.name}`,
+        class: "btn sm ghost danger", title: `Remove ${row.genre}`,
         onclick: () => { state.rows.splice(i, 1); setDirty(true); renderMap(); },
       }, "Remove"));
   }));
@@ -681,17 +794,21 @@ function renderMap() {
 
 function buildConfig() {
   const names = new Set();
-  const playlists = {};
+  const genres = {};
   for (const row of state.rows) {
-    const name = row.name.trim();
-    if (!name) throw new Error("Every genre playlist needs a name.");
-    if (names.has(name.toLowerCase())) throw new Error(`“${name}” is listed twice.`);
-    if (!row.keywords.length) throw new Error(`“${name}” needs at least one keyword.`);
-    names.add(name.toLowerCase());
-    playlists[name] = row.keywords;
+    const genre = row.genre.trim();
+    if (!genre) throw new Error("Every genre needs a name.");
+    if (names.has(genre.toLowerCase())) throw new Error(`“${genre}” is listed twice.`);
+    if (!row.keywords.length) throw new Error(`“${genre}” needs at least one keyword.`);
+    if (row.target === "new" && !row.newName.trim()) throw new Error(`Name the new playlist for “${genre}”.`);
+    names.add(genre.toLowerCase());
+    genres[genre] = { keywords: row.keywords, ...targetToConfig(row) };
   }
-  // keep any extra keys (like _help) from the original file
-  return { ...state.config, playlists, unsorted_playlist: state.unsorted.trim() || null };
+  const u = state.unsorted;
+  if (u.target === "new" && !u.newName.trim()) throw new Error("Name the playlist for songs that match nothing.");
+  // keep any extra keys (like _help) from the original file; "genres" replaces the old "playlists"
+  const { playlists: _old, ...rest } = state.config;
+  return { ...rest, genres, unsorted_playlist: u.target ? targetToConfig(u) : null };
 }
 
 async function saveGenreMap() {
@@ -715,17 +832,17 @@ $("logout-btn").onclick = async () => {
 };
 
 $("add-playlist-btn").onclick = () => {
-  state.rows.push({ name: "", keywords: [] });
+  state.rows.push({ genre: "", keywords: [], target: "new", newName: "" });
   setDirty(true);
   renderMap();
-  const inputs = document.querySelectorAll(".map-row > input");
+  const inputs = document.querySelectorAll("#map-rows .map-row > input");
   inputs[inputs.length - 1].focus();
 };
-$("unsorted-input").oninput = (e) => { state.unsorted = e.target.value; setDirty(true); };
 $("save-map-btn").onclick = async () => {
   show($("map-error"));
   try {
     await saveGenreMap();
+    await loadGenreMap();
     toast("Genre map saved.");
     if (state.plan) renderUnmatched();
   } catch (err) {
@@ -733,6 +850,8 @@ $("save-map-btn").onclick = async () => {
   }
 };
 $("revert-map-btn").onclick = loadGenreMap;
+for (const id of FILTER_IDS) $(id).addEventListener("input", updateFilterNote);
+$("clear-filters").onclick = () => { for (const id of FILTER_IDS) $(id).value = ""; updateFilterNote(); };
 
 $("tag-dialog-cancel").onclick = () => $("tag-dialog").close();
 $("tag-dialog-create").onclick = () => addTagTo($("tag-dialog-new").value);
