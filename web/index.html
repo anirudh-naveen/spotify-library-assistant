@@ -3,257 +3,594 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Genrefy</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%236d5dfc'/%3E%3Cpath d='M9 22V10h3v12zm5.5 0V6h3v16zM20 22v-8h3v8z' fill='white'/%3E%3C/svg%3E">
+<title>Spotassist</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%2307040e'/%3E%3Ccircle cx='32' cy='30' r='17' fill='%23ff2e88'/%3E%3Cpath d='M15 30h34M32 13v34M19 21h26M19 39h26' stroke='%2307040e' stroke-width='2.5'/%3E%3Cpath d='M51 22a12 12 0 0 1 0 16M56 17a19 19 0 0 1 0 26' stroke='%2322e4ff' stroke-width='3' fill='none' stroke-linecap='round'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bungee&family=Monoton&family=Outfit:wght@400;500;600;700;800&display=swap">
 <style>
   :root {
-    --bg: #f6f6f9;
-    --surface: #ffffff;
-    --surface-2: #f0f0f5;
-    --border: #e2e2ea;
-    --text: #17171c;
-    --muted: #6b6b78;
-    --accent: #6d5dfc;
-    --accent-text: #ffffff;
-    --accent-soft: #ecebff;
-    --good: #1a7f4b;
-    --good-soft: #e3f5ec;
-    --warn: #9a5b00;
-    --warn-soft: #fff1dc;
-    --bad: #b42318;
-    --bad-soft: #fde8e6;
-    --shadow: 0 1px 2px rgba(20, 20, 40, .06), 0 4px 16px rgba(20, 20, 40, .05);
-    --radius: 12px;
-    color-scheme: light;
+    --night: #07040e;
+    --night-2: #0e0820;
+    --panel: #130b25;
+    --panel-2: #1b1133;
+    --panel-3: #251843;
+    --line: rgba(255, 255, 255, .09);
+    --line-2: rgba(255, 255, 255, .16);
+    --text: #f6f1ff;
+    --muted: #a99cc9;
+    --pink: #ff2e88;
+    --cyan: #22e4ff;
+    --amber: #ffc23a;
+    --lime: #b8ff3c;
+    --violet: #8b5cff;
+    --bad: #ff5470;
+    --good: #3dffa8;
+    --room: var(--cyan);
+    --room-ink: #031317;
+    --radius: 18px;
+    --display: "Bungee", "Arial Black", Impact, sans-serif;
+    --neon: "Monoton", "Bungee", Impact, sans-serif;
+    --body: "Outfit", ui-rounded, "Avenir Next", system-ui, sans-serif;
+    color-scheme: dark;
   }
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --bg: #101014;
-      --surface: #19191f;
-      --surface-2: #23232b;
-      --border: #2e2e38;
-      --text: #ececf1;
-      --muted: #9a9aa8;
-      --accent: #8b7dff;
-      --accent-text: #0f0d24;
-      --accent-soft: #29254a;
-      --good: #5fd39a;
-      --good-soft: #15301f;
-      --warn: #f3b555;
-      --warn-soft: #33260f;
-      --bad: #ff8a80;
-      --bad-soft: #3a1714;
-      --shadow: none;
-      color-scheme: dark;
-    }
-  }
+  body[data-room=clean] { --room: var(--lime); --room-ink: #0d1400; }
+  body[data-room=map] { --room: var(--pink); --room-ink: #19000c; }
 
   * { box-sizing: border-box; }
+  html { background: var(--night); }
   body {
     margin: 0;
-    background: var(--bg);
+    min-height: 100vh;
     color: var(--text);
-    font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    font: 16px/1.5 var(--body);
     -webkit-font-smoothing: antialiased;
+    background:
+      radial-gradient(1200px 500px at 50% -120px, rgba(139, 92, 255, .28), transparent 70%),
+      radial-gradient(700px 400px at 0% 100%, rgba(255, 46, 136, .10), transparent 70%),
+      radial-gradient(700px 400px at 100% 80%, rgba(34, 228, 255, .08), transparent 70%),
+      var(--night);
+    background-attachment: fixed;
   }
   button, input, select { font: inherit; color: inherit; }
   [hidden] { display: none !important; }
+  ::selection { background: var(--pink); color: #fff; }
 
+  /* ------------------------------------------------ header & logo */
   header {
     display: flex; align-items: center; justify-content: space-between; gap: 12px;
-    padding: 14px 24px; border-bottom: 1px solid var(--border); background: var(--surface);
-    position: sticky; top: 0; z-index: 5;
+    max-width: 1100px; margin: 0 auto; padding: 18px 20px 6px;
   }
-  .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 18px; letter-spacing: -.01em; }
-  .brand-mark { width: 28px; height: 28px; border-radius: 8px; background: var(--accent); display: grid; place-items: center; }
-  .user { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 14px; }
+  .brand { display: flex; align-items: center; gap: 12px; text-decoration: none; color: inherit; }
+  .brand-mark { width: 54px; height: 54px; flex: none; overflow: visible; }
+  .wordmark {
+    font-family: var(--neon); font-size: 30px; letter-spacing: .04em; line-height: 1; color: #ffe3f1;
+    text-shadow: 0 0 6px rgba(255, 46, 136, .9), 0 0 18px rgba(255, 46, 136, .65), 0 0 38px rgba(255, 46, 136, .35);
+  }
+  .wordmark small {
+    display: block; font-family: var(--body); font-size: 11px; letter-spacing: .32em; text-transform: uppercase;
+    color: var(--muted); text-shadow: none; margin-top: 6px; font-weight: 600;
+  }
+  .user { display: flex; align-items: center; gap: 12px; color: var(--muted); font-size: 14px; }
+  .user b { color: var(--text); }
+  .wristband {
+    display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px 6px 10px; border-radius: 999px;
+    background: repeating-linear-gradient(-45deg, rgba(255,194,58,.16) 0 6px, rgba(255,194,58,.06) 6px 12px);
+    border: 1px dashed rgba(255, 194, 58, .5); color: #ffe1a1; font-weight: 600;
+  }
+  .wristband::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--amber); box-shadow: 0 0 8px var(--amber); }
 
-  main { max-width: 1040px; margin: 0 auto; padding: 24px 16px 120px; }
+  main { max-width: 1100px; margin: 0 auto; padding: 8px 16px 140px; }
 
+  /* ------------------------------------------------ the club scene */
+  .club {
+    position: relative; border-radius: 26px; overflow: hidden; background: #05030b;
+    border: 1px solid var(--line-2);
+    box-shadow: 0 0 0 1px rgba(0,0,0,.6), 0 30px 80px -30px rgba(139, 92, 255, .55), inset 0 0 60px rgba(0,0,0,.6);
+  }
+  .club svg { display: block; width: 100%; height: auto; aspect-ratio: 1200 / 440; }
+  .club::after { /* vignette */
+    content: ""; position: absolute; inset: 0; pointer-events: none;
+    background: radial-gradient(120% 90% at 50% 40%, transparent 55%, rgba(0,0,0,.55));
+  }
+  .club-caption {
+    position: absolute; left: 14px; bottom: 12px; z-index: 2; pointer-events: none;
+    font-family: var(--display); font-size: 13px; letter-spacing: .08em; text-transform: uppercase;
+    color: var(--room); text-shadow: 0 0 10px var(--room); transition: color .4s;
+    background: rgba(5, 3, 11, .78); border: 1px solid var(--line-2); border-radius: 999px; padding: 5px 12px;
+    backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+  }
+  .hotspot { fill: transparent; cursor: pointer; }
+  .hotspot:hover { fill: rgba(255,255,255,.035); }
+  .club[data-view=sort] .hotspot[data-room=sort], .club[data-view=clean] .hotspot[data-room=clean],
+  .club[data-view=map] .hotspot[data-room=map] { cursor: zoom-out; }
+  .club[data-view=overview] .hotspot { cursor: zoom-in; }
+
+  .neon-cyan { fill: none; stroke: var(--cyan); filter: url(#glow); }
+  .neon-pink { fill: none; stroke: var(--pink); filter: url(#glow); }
+  .neon-lime { fill: none; stroke: var(--lime); filter: url(#glow); }
+  .neon-amber { fill: none; stroke: var(--amber); filter: url(#glow); }
+  .sign-text { font-family: var(--neon); filter: url(#glow); }
+  .flicker { animation: flicker 7s infinite; }
+  @keyframes flicker { 0%, 92%, 100% { opacity: 1; } 93% { opacity: .3; } 94% { opacity: 1; } 96% { opacity: .5; } 97% { opacity: 1; } }
+
+  .beams { transform-box: view-box; transform-origin: 600px 112px; animation: sway 7s ease-in-out infinite alternate; mix-blend-mode: screen; }
+  .beams.b2 { animation-duration: 9s; animation-direction: alternate-reverse; }
+  @keyframes sway { from { transform: rotate(-16deg); } to { transform: rotate(16deg); } }
+  .sparkle { transform-box: fill-box; transform-origin: center; animation: twinkle 2.2s ease-in-out infinite; }
+  @keyframes twinkle { 0%, 100% { transform: scale(.2); opacity: 0; } 50% { transform: scale(1); opacity: 1; } }
+  .dot { animation: drift linear infinite; }
+  @keyframes drift { 0% { transform: translateX(-60px); opacity: 0; } 15%, 85% { opacity: .9; } 100% { transform: translateX(60px); opacity: 0; } }
+  .tile { stroke: #05030b; stroke-width: 2; animation: floor 3.2s steps(1) infinite; opacity: .9; }
+  @keyframes floor { 0% { fill: #ff2e88; } 25% { fill: #22e4ff; } 50% { fill: #ffc23a; } 75% { fill: #8b5cff; } }
+  .spin { transform-box: fill-box; transform-origin: center; animation: spin 1.8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .cone { transform-box: fill-box; transform-origin: center; animation: thump .47s ease-in-out infinite alternate; }
+  @keyframes thump { to { transform: scale(1.12); } }
+  .bob { animation: bob .47s ease-in-out infinite alternate; }
+  .bob.late { animation-delay: -.23s; }
+  @keyframes bob { to { transform: translateY(5px); } }
+  .bulb { animation: bulb 1.4s ease-in-out infinite alternate; }
+  @keyframes bulb { from { opacity: .45; } to { opacity: 1; } }
+  .eq rect { transform-box: fill-box; transform-origin: bottom; animation: eq .6s ease-in-out infinite alternate; }
+  @keyframes eq { from { transform: scaleY(.25); } to { transform: scaleY(1); } }
+
+  /* ------------------------------------------------ room tabs */
+  .rooms { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 16px 0 18px; }
+  .tab {
+    position: relative; text-align: left; cursor: pointer; border-radius: 16px; padding: 12px 16px 12px 58px;
+    background: linear-gradient(180deg, var(--panel-2), var(--panel)); border: 1px solid var(--line);
+    transition: transform .15s, border-color .2s, box-shadow .2s;
+  }
+  .tab:hover { transform: translateY(-2px); border-color: var(--line-2); }
+  .tab-icon { position: absolute; left: 14px; top: 50%; translate: 0 -50%; width: 32px; height: 32px; }
+  .tab-name { display: block; font-family: var(--display); font-size: 20px; letter-spacing: .04em; text-transform: uppercase; line-height: 1.1; }
+  .tab-where { display: block; font-size: 13px; color: var(--muted); }
+  .tab[data-room=sort] { --c: var(--cyan); }
+  .tab[data-room=clean] { --c: var(--lime); }
+  .tab[data-room=map] { --c: var(--pink); }
+  .tab .tab-icon { color: var(--c); opacity: .55; transition: opacity .2s; }
+  .tab[aria-selected=true] {
+    border-color: var(--c);
+    box-shadow: 0 0 0 1px var(--c), 0 0 24px -4px var(--c), inset 0 0 24px -12px var(--c);
+  }
+  .tab[aria-selected=true] .tab-name { color: var(--c); text-shadow: 0 0 12px var(--c); }
+  .tab[aria-selected=true] .tab-icon { opacity: 1; filter: drop-shadow(0 0 6px var(--c)); }
+
+  /* ------------------------------------------------ cards & type */
   .card {
-    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
-    box-shadow: var(--shadow); padding: 20px;
+    position: relative; background: linear-gradient(180deg, rgba(37, 24, 67, .55), rgba(19, 11, 37, .85));
+    border: 1px solid var(--line); border-radius: var(--radius); padding: 22px;
+    box-shadow: 0 20px 50px -30px rgba(0,0,0,.9);
   }
   .card + .card, .section { margin-top: 16px; }
-  h1 { font-size: 26px; letter-spacing: -.02em; margin: 0 0 8px; }
-  h2 { font-size: 16px; margin: 0 0 12px; }
-  .muted { color: var(--muted); }
-  .small { font-size: 13px; }
-
-  .btn {
-    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
-    border: 1px solid var(--border); background: var(--surface); border-radius: 999px;
-    padding: 8px 16px; cursor: pointer; font-weight: 600; white-space: nowrap; text-decoration: none;
+  .kicker {
+    display: inline-block; font-size: 11px; font-weight: 700; letter-spacing: .24em; text-transform: uppercase;
+    color: var(--room); margin-bottom: 4px;
   }
-  .btn:hover { background: var(--surface-2); }
-  .btn:disabled { opacity: .5; cursor: not-allowed; }
-  .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
-  .btn.primary:hover { filter: brightness(1.07); }
-  .btn.ghost { border-color: transparent; background: none; }
-  .btn.ghost:hover { background: var(--surface-2); }
+  h1 { font-family: var(--display); font-size: 34px; line-height: 1.05; letter-spacing: .01em; margin: 0 0 10px; text-transform: uppercase; }
+  h2 { font-family: var(--display); font-size: 19px; letter-spacing: .03em; margin: 0 0 12px; text-transform: uppercase; font-weight: 400; }
+  .muted { color: var(--muted); }
+  .small { font-size: 13.5px; }
+
+  /* ------------------------------------------------ controls */
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px; cursor: pointer; white-space: nowrap;
+    border: 1px solid var(--line-2); background: rgba(255,255,255,.04); border-radius: 999px;
+    padding: 10px 18px; font-weight: 700; font-size: 14px; letter-spacing: .06em; text-transform: uppercase; text-decoration: none;
+    transition: transform .12s, background .2s, box-shadow .2s, filter .2s;
+  }
+  .btn:hover { background: rgba(255,255,255,.09); transform: translateY(-1px); }
+  .btn:active { transform: translateY(1px); }
+  .btn:disabled { opacity: .45; cursor: not-allowed; transform: none; }
+  .btn.primary {
+    background: var(--room); border-color: var(--room); color: var(--room-ink);
+    box-shadow: 0 0 0 1px var(--room), 0 8px 26px -8px var(--room);
+  }
+  .btn.primary:hover { filter: brightness(1.08); background: var(--room); }
+  .btn.ghost { border-color: transparent; background: none; color: var(--muted); }
+  .btn.ghost:hover { color: var(--text); background: rgba(255,255,255,.06); }
   .btn.danger { color: var(--bad); }
-  .btn.sm { padding: 4px 12px; font-size: 13px; }
-  .btn:focus-visible, input:focus-visible, select:focus-visible, .chip:focus-visible {
-    outline: 2px solid var(--accent); outline-offset: 2px;
+  .btn.remove { background: var(--bad); border-color: var(--bad); color: #22000a; box-shadow: 0 8px 26px -8px var(--bad); }
+  .btn.remove:hover { background: var(--bad); filter: brightness(1.08); }
+  .btn.sm { padding: 6px 13px; font-size: 12px; }
+  .btn.big { padding: 14px 26px; font-size: 16px; }
+  .btn:focus-visible, input:focus-visible, select:focus-visible, .chip:focus-visible, .tab:focus-visible {
+    outline: 2px solid var(--room); outline-offset: 3px;
   }
 
   input[type=text], input[type=date], select {
-    border: 1px solid var(--border); background: var(--surface); border-radius: 8px;
-    padding: 8px 12px; min-width: 0;
+    border: 1px solid var(--line-2); background: rgba(5, 3, 11, .6); border-radius: 12px;
+    padding: 10px 14px; min-width: 0; transition: border-color .2s, box-shadow .2s;
   }
-
-  .login { max-width: 520px; margin: 48px auto; text-align: center; padding: 36px 28px; }
-  .login p { margin: 0 0 20px; }
-
-  .tabs { display: flex; gap: 4px; margin-bottom: 16px; border-bottom: 1px solid var(--border); }
-  .tab {
-    border: 0; background: none; padding: 10px 14px; cursor: pointer; font-weight: 600; color: var(--muted);
-    border-bottom: 2px solid transparent; margin-bottom: -1px;
-  }
-  .tab[aria-selected=true] { color: var(--text); border-bottom-color: var(--accent); }
+  input[type=text]:focus, input[type=date]:focus, select:focus { border-color: var(--room); box-shadow: 0 0 0 3px color-mix(in srgb, var(--room) 22%, transparent); outline: none; }
+  select option, select optgroup { background: #160d2b; }
+  input::placeholder { color: #7c6fa0; }
 
   .source-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
   .source-row select { flex: 1 1 260px; }
   .source-row input { flex: 1 1 220px; }
-  .or { color: var(--muted); font-size: 13px; }
+  .or { color: var(--muted); font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: .12em; }
 
-  .filters { margin-top: 14px; }
-  .filters summary { font-size: 14px; color: var(--text); font-weight: 600; margin: 0; }
+  .filters { margin-top: 16px; border-top: 1px dashed var(--line-2); padding-top: 12px; }
+  .filters summary { cursor: pointer; font-size: 14px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+  .filters summary::marker { color: var(--room); }
   .filter-grid { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 10px 16px; align-items: center; margin-top: 12px; }
-  .filter-grid > span { font-size: 14px; }
+  .filter-grid > span { font-size: 14px; color: var(--muted); }
   .range { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-  .range input { flex: 1 1 140px; max-width: 200px; }
-  .banner { border-radius: 10px; padding: 12px 14px; margin-top: 16px; white-space: pre-wrap; }
-  .banner.error { background: var(--bad-soft); color: var(--bad); }
-  .banner.ok { background: var(--good-soft); color: var(--good); }
+  .range input { flex: 1 1 140px; max-width: 210px; }
 
-  .progress { margin-top: 16px; }
-  .bar { height: 6px; background: var(--surface-2); border-radius: 999px; overflow: hidden; margin-top: 8px; }
-  .bar > div { height: 100%; width: 0; background: var(--accent); transition: width .3s; }
+  .banner { border-radius: 14px; padding: 12px 16px; margin-top: 16px; white-space: pre-wrap; font-weight: 500; }
+  .banner.error { background: rgba(255, 84, 112, .12); color: #ff9fb0; border: 1px solid rgba(255, 84, 112, .35); }
+  .banner.ok { background: rgba(61, 255, 168, .10); color: #9dffd2; border: 1px solid rgba(61, 255, 168, .3); }
+
+  .progress { margin-top: 18px; }
+  .progress-line { display: flex; align-items: center; gap: 10px; font-size: 14px; font-weight: 600; }
+  .eq-mini { display: inline-flex; align-items: flex-end; gap: 3px; height: 16px; }
+  .eq-mini i { width: 4px; height: 100%; background: var(--room); border-radius: 2px; transform-origin: bottom; animation: eq .5s ease-in-out infinite alternate; }
+  .eq-mini i:nth-child(2) { animation-delay: -.2s; } .eq-mini i:nth-child(3) { animation-delay: -.35s; } .eq-mini i:nth-child(4) { animation-delay: -.1s; }
+  .bar { height: 8px; background: rgba(255,255,255,.06); border-radius: 999px; overflow: hidden; margin-top: 10px; }
+  .bar > div {
+    height: 100%; width: 0; border-radius: inherit; transition: width .3s;
+    background: linear-gradient(90deg, var(--violet), var(--room), var(--amber)); box-shadow: 0 0 14px var(--room);
+  }
   .bar.indeterminate > div { width: 30%; animation: slide 1.2s ease-in-out infinite; }
   @keyframes slide { from { transform: translateX(-100%); } to { transform: translateX(340%); } }
 
-  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; }
-  .stat { background: var(--surface-2); border-radius: 10px; padding: 12px 14px; }
-  .stat b { display: block; font-size: 22px; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+  /* ------------------------------------------------ results */
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
+  .stat { background: rgba(5, 3, 11, .55); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; }
+  .stat b {
+    display: block; font-family: var(--display); font-weight: 400; font-size: 28px; line-height: 1.1;
+    color: var(--room); text-shadow: 0 0 14px color-mix(in srgb, var(--room) 60%, transparent); font-variant-numeric: tabular-nums;
+  }
   .stat span { color: var(--muted); font-size: 13px; }
 
-  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
-  .target { padding: 16px; margin: 0 !important; }
-  .target-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
-  .target-name { font-weight: 700; overflow-wrap: anywhere; }
-  .from { color: var(--muted); font-size: 13px; overflow-wrap: anywhere; }
-  .count { font-variant-numeric: tabular-nums; font-weight: 700; color: var(--accent); white-space: nowrap; }
-  .count.zero { color: var(--muted); font-weight: 500; }
-  .badge {
-    display: inline-block; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
-    background: var(--warn-soft); color: var(--warn); border-radius: 999px; padding: 2px 8px; margin-top: 6px;
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 12px; }
+  .target { padding: 16px 16px 14px 18px; margin: 0 !important; overflow: hidden; }
+  .target::before {
+    content: ""; position: absolute; inset: 0 auto 0 0; width: 4px;
+    background: linear-gradient(180deg, var(--room), var(--violet));
   }
-  details summary { cursor: pointer; color: var(--muted); font-size: 13px; margin-top: 8px; }
-  .songs { list-style: none; padding: 0; margin: 8px 0 0; font-size: 13px; max-height: 260px; overflow: auto; }
-  .songs li { padding: 4px 0; border-top: 1px solid var(--border); }
+  .target-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+  .target-name { font-weight: 800; font-size: 17px; overflow-wrap: anywhere; }
+  .from { color: var(--muted); font-size: 13px; overflow-wrap: anywhere; }
+  .count { font-family: var(--display); font-size: 20px; color: var(--room); white-space: nowrap; text-shadow: 0 0 10px color-mix(in srgb, var(--room) 50%, transparent); }
+  .count.zero { font-family: var(--body); font-size: 13px; font-weight: 600; color: var(--muted); text-shadow: none; }
+  .badge {
+    display: inline-block; font-size: 10.5px; font-weight: 800; text-transform: uppercase; letter-spacing: .14em;
+    background: rgba(255, 194, 58, .14); color: var(--amber); border: 1px solid rgba(255, 194, 58, .4);
+    border-radius: 999px; padding: 2px 9px; margin-top: 8px;
+  }
+  details summary { cursor: pointer; color: var(--muted); font-size: 13px; margin-top: 8px; font-weight: 600; }
+  .songs { list-style: none; padding: 0; margin: 8px 0 0; font-size: 13.5px; max-height: 260px; overflow: auto; }
+  .songs li { padding: 5px 0; border-top: 1px solid var(--line); }
   .songs li span { color: var(--muted); }
 
-  .unmatched-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); gap: 12px; padding: 10px 0; border-top: 1px solid var(--border); }
-  .unmatched-row .title { font-weight: 600; overflow-wrap: anywhere; }
-  .unmatched-row .artists { color: var(--muted); font-size: 13px; }
+  .unmatched-row, .clean-row { display: grid; gap: 12px; padding: 12px 0; border-top: 1px solid var(--line); }
+  .unmatched-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); }
+  .title { font-weight: 700; overflow-wrap: anywhere; }
+  .artists { color: var(--muted); font-size: 13.5px; }
   .chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
   .chip {
-    display: inline-flex; align-items: center; gap: 4px; border: 1px solid var(--border); background: var(--surface-2);
-    border-radius: 999px; padding: 2px 10px; font-size: 13px; cursor: pointer;
+    display: inline-flex; align-items: center; gap: 4px; border: 1px solid var(--line-2); background: rgba(255,255,255,.05);
+    border-radius: 999px; padding: 3px 11px; font-size: 13px; cursor: pointer; transition: border-color .15s, background .15s;
   }
-  .chip:hover { border-color: var(--accent); }
-  .chip.added { background: var(--accent-soft); border-color: var(--accent); }
+  .chip:hover { border-color: var(--room); background: color-mix(in srgb, var(--room) 12%, transparent); }
+  .chip.added { background: rgba(255, 46, 136, .16); border-color: var(--pink); color: #ffc2dc; }
   .chip.static { cursor: default; }
-  .chip .x { border: 0; background: none; padding: 0 0 0 2px; cursor: pointer; color: var(--muted); font-size: 15px; line-height: 1; }
+  .chip.static:hover { border-color: var(--line-2); background: rgba(255,255,255,.05); }
+  .chip .x { border: 0; background: none; padding: 0 0 0 2px; cursor: pointer; color: var(--muted); font-size: 16px; line-height: 1; }
   .chip .x:hover { color: var(--bad); }
 
-  .applybar {
-    position: fixed; left: 0; right: 0; bottom: 0; z-index: 6;
-    background: var(--surface); border-top: 1px solid var(--border); box-shadow: 0 -4px 16px rgba(0,0,0,.06);
-  }
-  .applybar-inner { max-width: 1040px; margin: 0 auto; padding: 12px 16px; display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+  .clean-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .clean-row { grid-template-columns: auto minmax(0, 1fr) minmax(0, 1.3fr); align-items: start; cursor: pointer; }
+  .clean-row input { margin-top: 3px; width: 18px; height: 18px; accent-color: var(--bad); }
+  .clean-row.kept .title, .clean-row.kept .artists { opacity: .5; }
+  .clean-row:not(.kept) .title { text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--bad) 70%, transparent); text-decoration-thickness: 2px; }
+  .clean-group { margin: 20px 0 4px; font-size: 12px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--amber); }
 
-  .btn.remove { background: var(--bad); border-color: var(--bad); color: var(--surface); }
-  .btn.remove:hover { filter: brightness(1.07); background: var(--bad); }
-  .clean-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
-  .clean-row {
-    display: grid; grid-template-columns: auto minmax(0, 1fr) minmax(0, 1.3fr); gap: 12px; align-items: start;
-    padding: 10px 0; border-top: 1px solid var(--border); cursor: pointer;
-  }
-  .clean-row input { margin-top: 4px; width: 16px; height: 16px; accent-color: var(--bad); }
-  .clean-row .title { font-weight: 600; overflow-wrap: anywhere; }
-  .clean-row .artists { color: var(--muted); font-size: 13px; }
-  .clean-row.kept .title, .clean-row.kept .artists { opacity: .55; }
-  .clean-group { margin: 18px 0 4px; font-size: 13px; font-weight: 600; color: var(--muted); }
-  .map-row { display: grid; grid-template-columns: minmax(120px, 180px) minmax(0, 1fr) minmax(170px, 230px) auto; gap: 12px; align-items: start; padding: 12px 0; border-top: 1px solid var(--border); }
-  .map-head { color: var(--muted); font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; border-top: 0; padding-bottom: 0; }
+  /* ------------------------------------------------ genre map */
+  .map-row { display: grid; grid-template-columns: minmax(120px, 180px) minmax(0, 1fr) minmax(170px, 230px) auto; gap: 12px; align-items: start; padding: 14px 0; border-top: 1px solid var(--line); }
+  .map-head { color: var(--room); font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .2em; border-top: 0; padding-bottom: 0; }
+  .map-row .chips input { border: 1px dashed var(--line-2); background: none; border-radius: 999px; padding: 3px 11px; font-size: 13px; width: 140px; }
   .target-pick { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
   .target-pick select, .target-pick input { width: 100%; }
   .unsorted-pick { width: min(100%, 320px); }
-  .map-row .chips input { border: 1px dashed var(--border); background: none; border-radius: 999px; padding: 2px 10px; font-size: 13px; width: 140px; }
   .map-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 16px; }
-  .field { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 16px; }
+  .field { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-top: 18px; }
+
+  /* ------------------------------------------------ bars, dialog, toast */
+  .applybar {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 6;
+    background: linear-gradient(180deg, rgba(14, 8, 32, .82), rgba(7, 4, 14, .96));
+    border-top: 1px solid var(--line-2); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+  }
+  .applybar::before { content: ""; position: absolute; inset: -1px 0 auto; height: 2px; background: linear-gradient(90deg, transparent, var(--room), transparent); }
+  .applybar-inner { max-width: 1100px; margin: 0 auto; padding: 14px 20px; display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; font-weight: 600; }
 
   dialog {
-    border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); color: var(--text);
-    padding: 20px; width: min(420px, calc(100vw - 32px)); box-shadow: 0 12px 40px rgba(0,0,0,.25);
+    border: 1px solid var(--line-2); border-radius: 20px; background: var(--panel); color: var(--text);
+    padding: 22px; width: min(440px, calc(100vw - 32px)); box-shadow: 0 0 0 1px rgba(0,0,0,.5), 0 30px 80px rgba(0,0,0,.6), 0 0 40px -10px var(--room);
   }
-  dialog::backdrop { background: rgba(10, 10, 20, .45); }
-  .pick { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+  dialog::backdrop { background: rgba(5, 2, 12, .7); backdrop-filter: blur(4px); }
+  .pick { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0; }
   .dialog-new { display: flex; gap: 8px; }
   .dialog-new input { flex: 1; }
 
   .toast {
-    position: fixed; left: 50%; bottom: 88px; transform: translateX(-50%); z-index: 10;
-    background: var(--text); color: var(--bg); padding: 10px 16px; border-radius: 10px; font-size: 14px;
-    max-width: calc(100vw - 32px); box-shadow: 0 8px 24px rgba(0,0,0,.2);
+    position: fixed; left: 50%; bottom: 96px; transform: translateX(-50%); z-index: 10;
+    background: var(--room); color: var(--room-ink); padding: 11px 18px; border-radius: 999px; font-weight: 700; font-size: 14px;
+    max-width: calc(100vw - 32px); box-shadow: 0 10px 30px -6px var(--room);
   }
-  .log { font: 13px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace; margin: 8px 0 0; padding: 0; list-style: none; }
 
-  @media (max-width: 640px) {
-    header { padding: 12px 16px; }
+  /* ------------------------------------------------ door (login) */
+  .door { max-width: 620px; margin: 22px auto 0; text-align: center; padding: 30px 26px 32px; }
+  .door p { margin: 0 auto 22px; max-width: 470px; }
+  .door .btn.primary { --room: var(--pink); --room-ink: #19000c; }
+  .loading { text-align: center; padding: 40px 0; font-family: var(--display); letter-spacing: .1em; color: var(--muted); }
+
+  @media (max-width: 760px) {
+    header { padding: 14px 16px 4px; }
+    .brand-mark { width: 44px; height: 44px; }
+    .wordmark { font-size: 22px; }
+    .wordmark small { letter-spacing: .2em; }
+    .user .who { display: none; }
+    .rooms { gap: 8px; }
+    .tab { padding: 10px 10px 10px 12px; text-align: center; }
+    .tab-icon { position: static; translate: none; display: block; margin: 0 auto 4px; width: 26px; height: 26px; }
+    .tab-name { font-size: 16px; }
+    .tab-where { font-size: 11.5px; }
+    .club { border-radius: 18px; }
+    .club-caption { font-size: 11px; left: 12px; bottom: 8px; }
+    h1 { font-size: 26px; }
     .unmatched-row, .map-row { grid-template-columns: 1fr; }
     .map-head { display: none; }
+    .map-row > .btn { justify-self: start; }
+    .target-pick::before { content: "Goes to"; color: var(--room); font-size: 11px; font-weight: 800; letter-spacing: .2em; text-transform: uppercase; }
     .filter-grid { grid-template-columns: 1fr; }
     .clean-row { grid-template-columns: auto minmax(0, 1fr); }
     .clean-row .chips { grid-column: 2; }
-    .target-pick::before { content: "Goes to"; color: var(--muted); font-size: 12px; font-weight: 600; }
-    .map-row > .btn { justify-self: start; }
-    .user .who { display: none; }
+  }
+
+  @media (max-width: 440px) {
+    header { gap: 8px; padding: 12px 12px 4px; }
+    .brand { gap: 8px; min-width: 0; }
+    .brand-mark { width: 34px; height: 34px; }
+    .wordmark { font-size: 17px; }
+    .wordmark small { display: none; }
+    .user .btn { padding: 5px 10px; }
+    main { padding-left: 12px; padding-right: 12px; }
+    .tab { padding: 10px 6px; }
+    .tab-where { display: none; }
+    .card { padding: 18px 16px; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation: none !important; transition: none !important; }
   }
 </style>
 </head>
-<body>
+<body data-room="sort">
 <header>
-  <div class="brand">
-    <div class="brand-mark" aria-hidden="true">
-      <svg width="16" height="16" viewBox="0 0 32 32"><path d="M9 22V10h3v12zm5.5 0V6h3v16zM20 22v-8h3v8z" fill="white"/></svg>
-    </div>
-    Genrefy
-  </div>
+  <a class="brand" href="/" aria-label="Spotassist home">
+    <!-- Logo: two hands holding up a disco ball that sends out sound waves -->
+    <svg class="brand-mark" viewBox="0 0 64 64" aria-hidden="true">
+      <defs>
+        <radialGradient id="lb-shade" cx="38%" cy="32%" r="70%">
+          <stop offset="0" stop-color="#ffd1e6"/>
+          <stop offset=".45" stop-color="#ff2e88"/>
+          <stop offset="1" stop-color="#7a0b45"/>
+        </radialGradient>
+        <clipPath id="lb-clip"><circle cx="30" cy="27" r="16"/></clipPath>
+      </defs>
+      <circle cx="30" cy="27" r="16" fill="url(#lb-shade)"/>
+      <g clip-path="url(#lb-clip)" fill="none" stroke="#2b0418" stroke-opacity=".55" stroke-width="1.2">
+        <ellipse cx="30" cy="27" rx="5" ry="16"/><ellipse cx="30" cy="27" rx="11" ry="16"/>
+        <path d="M14 21h32M14 27h32M14 33h32M16 15.5h28M16 38.5h28"/>
+      </g>
+      <path d="M25 18.5h3.4v3.4H25z" fill="#fff" opacity=".9"/>
+      <path d="M48 19a11 11 0 0 1 0 16M53 14.5a17.5 17.5 0 0 1 0 25" fill="none" stroke="#22e4ff" stroke-width="2.6" stroke-linecap="round"/>
+      <!-- hands -->
+      <path d="M14 61c-1-6 0-10 3-13l3-4.2c.8-1.1 2.4-1 3 .3l.4.9 1.6-3.3c.6-1.2 2.3-1.2 2.9 0l.3.8 1.6-.6c1.2-.4 2.3.6 2 1.8L30.5 49c-1 3.5-3 6-5 8l-.5 4z" fill="#ffc23a"/>
+      <path d="M46 61c1-6 0-10-3-13l-3-4.2c-.8-1.1-2.4-1-3 .3l-.4.9-1.6-3.3c-.6-1.2-2.3-1.2-2.9 0l-.3.8-1.6-.6c-1.2-.4-2.3.6-2 1.8L29.5 49c1 3.5 3 6 5 8l.5 4z" fill="#ffb01f"/>
+      <path d="M58 6l1.2 3 3 1.2-3 1.2L58 14.4l-1.2-3-3-1.2 3-1.2z" fill="#fff"/>
+    </svg>
+    <span class="wordmark">Spotassist<small>Sort playlists by genre</small></span>
+  </a>
   <div class="user" id="user-area" hidden>
-    <span class="who">Signed in as <b id="user-name"></b></span>
-    <button class="btn sm" id="logout-btn">Log out</button>
+    <span class="who wristband">Signed in as <b id="user-name"></b></span>
+    <button class="btn sm ghost" id="logout-btn">Log out</button>
   </div>
 </header>
 
 <main>
-  <div id="loading" class="muted">Loading…</div>
+  <div class="club" id="club" data-view="overview">
+    <svg id="scene" viewBox="0 0 1200 440" role="img" aria-label="A night club: DJ booth on the left, a dance floor under a spinning disco ball in the middle, and a restroom on the right">
+      <defs>
+        <linearGradient id="wall" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#170c30"/><stop offset=".7" stop-color="#0c0619"/><stop offset="1" stop-color="#07040e"/>
+        </linearGradient>
+        <linearGradient id="floor" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#120a22"/><stop offset="1" stop-color="#05030b"/>
+        </linearGradient>
+        <linearGradient id="beam-pink" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ff2e88" stop-opacity=".55"/><stop offset="1" stop-color="#ff2e88" stop-opacity="0"/></linearGradient>
+        <linearGradient id="beam-cyan" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#22e4ff" stop-opacity=".5"/><stop offset="1" stop-color="#22e4ff" stop-opacity="0"/></linearGradient>
+        <linearGradient id="beam-amber" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffc23a" stop-opacity=".45"/><stop offset="1" stop-color="#ffc23a" stop-opacity="0"/></linearGradient>
+        <linearGradient id="beam-lime" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#b8ff3c" stop-opacity=".4"/><stop offset="1" stop-color="#b8ff3c" stop-opacity="0"/></linearGradient>
+        <radialGradient id="ball-shade" cx="36%" cy="30%" r="75%">
+          <stop offset="0" stop-color="#fff" stop-opacity=".55"/>
+          <stop offset=".35" stop-color="#fff" stop-opacity="0"/>
+          <stop offset=".8" stop-color="#0a0516" stop-opacity=".45"/>
+          <stop offset="1" stop-color="#0a0516" stop-opacity=".9"/>
+        </radialGradient>
+        <radialGradient id="ball-halo" cx="50%" cy="50%" r="50%">
+          <stop offset="0" stop-color="#fff" stop-opacity=".22"/><stop offset="1" stop-color="#8b5cff" stop-opacity="0"/>
+        </radialGradient>
+        <linearGradient id="mirror" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stop-color="#3b2f63"/><stop offset=".5" stop-color="#1d1638"/><stop offset=".55" stop-color="#4a3d78"/><stop offset="1" stop-color="#1a1333"/>
+        </linearGradient>
+        <pattern id="facets" width="56" height="56" patternUnits="userSpaceOnUse">
+          <g stroke="#1b1430" stroke-width="1.4">
+            <rect x="0" y="0" width="14" height="14" fill="#d9def0"/><rect x="14" y="0" width="14" height="14" fill="#8b93ad"/><rect x="28" y="0" width="14" height="14" fill="#f4f6ff"/><rect x="42" y="0" width="14" height="14" fill="#a5adc6"/>
+            <rect x="0" y="14" width="14" height="14" fill="#9aa2bd"/><rect x="14" y="14" width="14" height="14" fill="#ffb3d3"/><rect x="28" y="14" width="14" height="14" fill="#7d86a2"/><rect x="42" y="14" width="14" height="14" fill="#e3e8f8"/>
+            <rect x="0" y="28" width="14" height="14" fill="#eef1fc"/><rect x="14" y="28" width="14" height="14" fill="#a1a9c3"/><rect x="28" y="28" width="14" height="14" fill="#b6f6ff"/><rect x="42" y="28" width="14" height="14" fill="#878fa9"/>
+            <rect x="0" y="42" width="14" height="14" fill="#7f88a4"/><rect x="14" y="42" width="14" height="14" fill="#dfe4f5"/><rect x="28" y="42" width="14" height="14" fill="#9299b3"/><rect x="42" y="42" width="14" height="14" fill="#fff1b8"/>
+          </g>
+          <animateTransform attributeName="patternTransform" type="translate" from="0 0" to="56 0" dur="2.6s" repeatCount="indefinite"/>
+        </pattern>
+        <pattern id="wc-tiles" width="22" height="22" patternUnits="userSpaceOnUse">
+          <rect width="22" height="22" fill="#100a1f"/><path d="M0 .5h22M.5 0v22" stroke="#22183a" stroke-width="1"/>
+        </pattern>
+        <pattern id="truss" width="24" height="20" patternUnits="userSpaceOnUse">
+          <rect width="24" height="20" fill="#120b22"/><path d="M0 20L12 0L24 20" stroke="#2c2148" stroke-width="2" fill="none"/>
+        </pattern>
+        <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+          <feGaussianBlur stdDeviation="3.2" result="b"/>
+          <feMerge><feMergeNode in="b"/><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+        </filter>
+      </defs>
 
-  <section id="login-view" class="card login" hidden>
-    <h1>Sort playlists by genre</h1>
-    <p class="muted">Genrefy reads a playlist, looks up each artist's genre tags on Last.fm, and adds the songs to the genre playlists you set up. Log in to get started.</p>
-    <a class="btn primary" href="/login">Log in with Spotify</a>
+      <!-- room -->
+      <rect width="1200" height="440" fill="url(#wall)"/>
+      <rect x="850" y="40" width="350" height="262" fill="url(#wc-tiles)"/>
+      <rect y="300" width="1200" height="140" fill="url(#floor)"/>
+      <path d="M0 300.5h1200" stroke="#2c2148"/>
+      <g id="reflections"></g>
+
+      <!-- pillars between rooms -->
+      <rect x="436" y="20" width="16" height="282" fill="#0d0719"/><path d="M450 24v276" class="neon-cyan" stroke-width="2"/>
+      <rect x="840" y="20" width="16" height="282" fill="#0d0719"/><path d="M842 24v276" class="neon-lime" stroke-width="2"/>
+
+      <!-- DJ booth (Sort) -->
+      <g id="dj">
+        <text x="250" y="140" text-anchor="middle" class="sign-text flicker" font-size="46" fill="#cffaff" stroke="#22e4ff" stroke-width="1">DJ</text>
+        <path d="M200 98h100" class="neon-cyan" stroke-width="2"/>
+        <!-- speakers -->
+        <g>
+          <rect x="30" y="168" width="84" height="132" rx="6" fill="#0f0a1c" stroke="#2c2148" stroke-width="2"/>
+          <circle cx="72" cy="206" r="26" fill="#05030b" stroke="#3a2d5a" stroke-width="3" class="cone"/>
+          <circle cx="72" cy="206" r="9" fill="#22e4ff" opacity=".35" class="cone"/>
+          <circle cx="72" cy="264" r="20" fill="#05030b" stroke="#3a2d5a" stroke-width="3" class="cone"/>
+        </g>
+        <g>
+          <rect x="386" y="168" width="44" height="132" rx="5" fill="#0f0a1c" stroke="#2c2148" stroke-width="2"/>
+          <circle cx="408" cy="200" r="13" fill="#05030b" stroke="#3a2d5a" stroke-width="2.5" class="cone"/>
+          <circle cx="408" cy="244" r="13" fill="#05030b" stroke="#3a2d5a" stroke-width="2.5" class="cone"/>
+        </g>
+        <!-- the DJ -->
+        <g class="bob">
+          <path d="M210 214c4-24 20-30 40-30s36 6 40 30z" fill="#0a0614" stroke="#22e4ff" stroke-opacity=".35"/>
+          <circle cx="250" cy="166" r="17" fill="#0a0614" stroke="#22e4ff" stroke-opacity=".35"/>
+          <path d="M231 166a19 19 0 0 1 38 0" class="neon-cyan" stroke-width="3"/>
+          <rect x="226" y="160" width="7" height="13" rx="3" fill="#22e4ff"/><rect x="267" y="160" width="7" height="13" rx="3" fill="#22e4ff"/>
+          <path d="M226 205l-14 12M274 205l14 12" stroke="#0a0614" stroke-width="10" stroke-linecap="round"/>
+        </g>
+        <!-- booth -->
+        <rect x="132" y="196" width="236" height="26" rx="5" fill="#1a1131" stroke="#33285a"/>
+        <circle cx="180" cy="209" r="19" fill="#05030b" stroke="#3a2d5a" stroke-width="2"/>
+        <g class="spin"><circle cx="180" cy="209" r="15" fill="#120b20"/><circle cx="180" cy="209" r="5" fill="#ff2e88"/><path d="M180 195v6" stroke="#fff" stroke-opacity=".5" stroke-width="2"/></g>
+        <circle cx="320" cy="209" r="19" fill="#05030b" stroke="#3a2d5a" stroke-width="2"/>
+        <g class="spin"><circle cx="320" cy="209" r="15" fill="#120b20"/><circle cx="320" cy="209" r="5" fill="#ffc23a"/><path d="M320 195v6" stroke="#fff" stroke-opacity=".5" stroke-width="2"/></g>
+        <rect x="226" y="200" width="48" height="18" rx="3" fill="#0b0716" stroke="#33285a"/>
+        <g class="eq" fill="#22e4ff"><rect x="232" y="203" width="5" height="12"/><rect x="240" y="203" width="5" height="12" style="animation-delay:-.2s"/><rect x="248" y="203" width="5" height="12" style="animation-delay:-.4s"/><rect x="256" y="203" width="5" height="12" style="animation-delay:-.1s"/><rect x="264" y="203" width="5" height="12" style="animation-delay:-.3s"/></g>
+        <path d="M140 222h220l-10 80H150z" fill="#120b22" stroke="#2c2148"/>
+        <path d="M148 236h204" class="neon-cyan" stroke-width="2.5"/>
+        <text x="250" y="272" text-anchor="middle" font-family="Bungee, Impact, sans-serif" font-size="15" fill="#22e4ff" opacity=".8" letter-spacing="3">SORT</text>
+      </g>
+
+      <!-- disco ball & beams (dance floor) -->
+      <g class="beams">
+        <path d="M600 112L470 440H530Z" fill="url(#beam-pink)"/>
+        <path d="M600 112L660 440H730Z" fill="url(#beam-cyan)"/>
+        <path d="M600 112L250 440H320Z" fill="url(#beam-amber)"/>
+      </g>
+      <g class="beams b2">
+        <path d="M600 112L880 440H950Z" fill="url(#beam-lime)"/>
+        <path d="M600 112L560 440H610Z" fill="url(#beam-amber)"/>
+        <path d="M600 112L360 440H400Z" fill="url(#beam-cyan)"/>
+      </g>
+      <rect width="1200" height="20" fill="url(#truss)"/>
+      <path d="M600 20V64" stroke="#5c5280" stroke-width="2"/>
+      <circle cx="600" cy="112" r="90" fill="url(#ball-halo)"/>
+      <circle cx="600" cy="112" r="48" fill="url(#facets)"/>
+      <circle cx="600" cy="112" r="48" fill="url(#ball-shade)"/>
+      <circle cx="600" cy="112" r="48" fill="none" stroke="#0a0516" stroke-width="2"/>
+      <path class="sparkle" d="M578 86l2.5 7 7 2.5-7 2.5-2.5 7-2.5-7-7-2.5 7-2.5z" fill="#fff"/>
+      <path class="sparkle" style="animation-delay:-1s" d="M626 128l2 5 5 2-5 2-2 5-2-5-5-2 5-2z" fill="#fff"/>
+      <path class="sparkle" style="animation-delay:-1.6s" d="M560 140l1.5 4 4 1.5-4 1.5-1.5 4-1.5-4-4-1.5 4-1.5z" fill="#ffd1e6"/>
+
+      <!-- dance floor (Map) -->
+      <g id="tiles"></g>
+      <g id="dancers" fill="#0a0614">
+        <g class="bob"><circle cx="540" cy="300" r="11" stroke="#ff2e88" stroke-opacity=".6"/><path d="M524 362c0-30 6-50 16-50s16 20 16 50z" stroke="#ff2e88" stroke-opacity=".6"/><path d="M528 322l-16-26M552 322l14-30" stroke="#0a0614" stroke-width="7" stroke-linecap="round"/></g>
+        <g class="bob late"><circle cx="612" cy="294" r="12" stroke="#22e4ff" stroke-opacity=".6"/><path d="M594 362c0-34 7-56 18-56s18 22 18 56z" stroke="#22e4ff" stroke-opacity=".6"/><path d="M600 318l-18 20M624 318l18-28" stroke="#0a0614" stroke-width="7" stroke-linecap="round"/></g>
+        <g class="bob"><circle cx="684" cy="302" r="10" stroke="#ffc23a" stroke-opacity=".6"/><path d="M670 362c0-28 5-46 14-46s14 18 14 46z" stroke="#ffc23a" stroke-opacity=".6"/><path d="M674 322l-12-28M694 322l10 24" stroke="#0a0614" stroke-width="6" stroke-linecap="round"/></g>
+      </g>
+      <text x="645" y="262" text-anchor="middle" class="sign-text" font-size="22" fill="#ffd1e6" stroke="#ff2e88" stroke-width=".8" opacity=".9">MAP</text>
+
+      <!-- restroom (Clean) -->
+      <g id="wc">
+        <text x="1080" y="96" text-anchor="middle" font-family="Bungee, Impact, sans-serif" font-size="17" fill="#eaffc7" stroke="#b8ff3c" stroke-width=".6" class="flicker" filter="url(#glow)" letter-spacing="2">RESTROOM</text>
+        <!-- pictograms -->
+        <g class="neon-lime" stroke-width="2.4" stroke-linecap="round">
+          <circle cx="1060" cy="118" r="4"/><path d="M1060 125v18M1054 131h12M1056 156l4-13 4 13"/>
+          <circle cx="1100" cy="118" r="4"/><path d="M1100 125l-7 18h14zM1097 143v13M1103 143v13"/>
+        </g>
+        <!-- mirror with vanity bulbs -->
+        <rect x="878" y="118" width="120" height="78" rx="6" fill="url(#mirror)" stroke="#4c3f7c" stroke-width="3"/>
+        <path d="M900 130l30 52M926 130l22 38" stroke="#fff" stroke-opacity=".12" stroke-width="5"/>
+        <g fill="#ffc23a">
+          <circle class="bulb" cx="890" cy="112" r="4"/><circle class="bulb" style="animation-delay:-.4s" cx="914" cy="112" r="4"/><circle class="bulb" style="animation-delay:-.8s" cx="938" cy="112" r="4"/><circle class="bulb" style="animation-delay:-.2s" cx="962" cy="112" r="4"/><circle class="bulb" style="animation-delay:-1s" cx="986" cy="112" r="4"/>
+        </g>
+        <!-- sink -->
+        <path d="M888 214h100l-8 18h-84z" fill="#d7d2ec"/><rect x="884" y="208" width="108" height="8" rx="3" fill="#efeaff"/>
+        <path d="M938 208v-10h10" stroke="#9e98b8" stroke-width="4" fill="none"/>
+        <rect x="930" y="232" width="16" height="68" fill="#1d1535"/>
+        <!-- door -->
+        <rect x="1040" y="170" width="94" height="132" rx="4" fill="#1b1232" stroke="#3a2d5a" stroke-width="3"/>
+        <rect x="1052" y="184" width="70" height="44" rx="3" fill="none" stroke="#2b2148" stroke-width="2"/>
+        <circle cx="1120" cy="242" r="4.5" fill="#ffc23a"/>
+        <path d="M1040 300.5h94" class="neon-lime" stroke-width="2"/>
+        <!-- mop & bucket -->
+        <path d="M1008 196l-14 98" stroke="#9e7a4a" stroke-width="4" stroke-linecap="round"/>
+        <path d="M986 290q8 10 18 0" stroke="#d7d2ec" stroke-width="6" fill="none" stroke-linecap="round"/>
+        <path d="M996 262h34l-4 38h-26z" fill="#ffc23a"/><path d="M996 268h34" stroke="#c48c0f" stroke-width="2"/>
+        <path d="M1001 262q12-14 24 0" stroke="#7d5a12" stroke-width="2" fill="none"/>
+        <text x="944" y="280" text-anchor="middle" font-family="Outfit, sans-serif" font-weight="800" font-size="11" fill="#b8ff3c" opacity=".85" letter-spacing="2">CLEAN</text>
+      </g>
+
+      <!-- click targets -->
+      <rect class="hotspot" data-room="sort" x="0" y="60" width="436" height="380"/>
+      <rect class="hotspot" data-room="map" x="452" y="150" width="388" height="290"/>
+      <rect class="hotspot" data-room="clean" x="856" y="60" width="344" height="380"/>
+    </svg>
+  </div>
+
+  <div id="loading" class="loading">Loading…</div>
+
+  <section id="login-view" class="card door" hidden>
+    <h1>Sort your playlists by genre</h1>
+    <p class="muted">Spotassist reads a playlist, looks up each artist's genre tags on Last.fm, and adds each song to the genre playlists you set up. You can also remove songs that don't fit a playlist. Log in with Spotify to start.</p>
+    <a class="btn primary big" href="/login">Log in with Spotify</a>
     <div id="login-error" class="banner error" hidden></div>
   </section>
 
   <section id="app-view" hidden>
-    <div class="tabs" role="tablist">
-      <button class="tab" role="tab" id="tab-sort" aria-selected="true" aria-controls="sort-panel">Sort</button>
-      <button class="tab" role="tab" id="tab-map" aria-selected="false" aria-controls="map-panel">Genre map</button>
-      <button class="tab" role="tab" id="tab-clean" aria-selected="false" aria-controls="clean-panel">Clean up</button>
-    </div>
+    <nav class="rooms" role="tablist" aria-label="Rooms">
+      <button class="tab" role="tab" id="tab-sort" data-room="sort" aria-selected="true" aria-controls="sort-panel">
+        <svg class="tab-icon" viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="13" fill="none" stroke="currentColor" stroke-width="2.5"/><circle cx="16" cy="16" r="4" fill="currentColor"/><path d="M16 5.5a10.5 10.5 0 0 1 10.5 10.5" fill="none" stroke="currentColor" stroke-width="1.6" opacity=".6"/></svg>
+        <span class="tab-name">Sort</span><span class="tab-where">Add songs to genre playlists</span>
+      </button>
+      <button class="tab" role="tab" id="tab-clean" data-room="clean" aria-selected="false" aria-controls="clean-panel">
+        <svg class="tab-icon" viewBox="0 0 32 32" aria-hidden="true"><path d="M20 3l-6 17" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/><path d="M7 22h16l-2 7H9z" fill="currentColor"/><path d="M5 18q4-3 7 0" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="26" cy="9" r="1.6" fill="currentColor"/><circle cx="28" cy="15" r="1.1" fill="currentColor"/></svg>
+        <span class="tab-name">Clean</span><span class="tab-where">Remove songs that don't fit</span>
+      </button>
+      <button class="tab" role="tab" id="tab-map" data-room="map" aria-selected="false" aria-controls="map-panel">
+        <svg class="tab-icon" viewBox="0 0 32 32" aria-hidden="true"><path d="M3 26l6-9h14l6 9z" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"/><path d="M12 17l-2 9M20 17l2 9M5 22h22" stroke="currentColor" stroke-width="1.6"/><circle cx="16" cy="8" r="5" fill="currentColor"/><path d="M16 1v2" stroke="currentColor" stroke-width="2"/></svg>
+        <span class="tab-name">Map</span><span class="tab-where">Edit genres and playlists</span>
+      </button>
+    </nav>
 
     <div id="sort-panel" role="tabpanel">
       <div class="card">
@@ -283,9 +620,9 @@
           <p class="muted small" style="margin:10px 0 0">Leave a box empty for no limit. Ranges include both ends. Release dates can be a year (2015), a month (2015-06) or a full date.
             <button class="btn sm ghost" id="clear-filters" type="button">Clear dates</button></p>
         </details>
-        <p class="muted small" style="margin:10px 0 0">Preview doesn't change anything in Spotify. You'll see exactly what will be added first.</p>
+        <p class="muted small" style="margin:12px 0 0">Preview doesn't change anything in Spotify. You'll see exactly what will be added first.</p>
         <div id="progress" class="progress" hidden>
-          <div class="small"><span id="progress-stage"></span> <span id="progress-count" class="muted"></span></div>
+          <div class="progress-line"><span class="eq-mini" aria-hidden="true"><i></i><i></i><i></i><i></i></span><span id="progress-stage"></span> <span id="progress-count" class="muted"></span></div>
           <div class="bar" id="progress-bar"><div></div></div>
         </div>
         <div id="sort-error" class="banner error" hidden></div>
@@ -302,9 +639,39 @@
         </div>
         <div class="card section" id="unmatched-card">
           <h2 id="unmatched-title"></h2>
-          <p class="muted small" style="margin-top:-6px">Click a tag to add it to a genre playlist's keywords, then preview again.</p>
+          <p class="muted small" style="margin-top:-6px">Click a tag to add it to a genre's keywords, then preview again.</p>
           <div id="unmatched"></div>
         </div>
+      </div>
+    </div>
+
+    <div id="clean-panel" role="tabpanel" hidden>
+      <div class="card">
+        <h2>Clean up a playlist</h2>
+        <p class="muted small" style="margin-top:-6px">Pick one of your playlists and what it should be. Spotassist lists the songs whose artists match none of those genres' keywords on Last.fm. You choose which to remove, and nothing changes until you confirm.</p>
+        <div class="source-row">
+          <select id="clean-playlist" aria-label="Playlist to clean up"></select>
+          <select id="clean-genre" aria-label="Genres the playlist should match"></select>
+          <button class="btn primary" id="clean-btn">Find songs</button>
+        </div>
+        <div id="clean-progress" class="progress" hidden>
+          <div class="progress-line"><span class="eq-mini" aria-hidden="true"><i></i><i></i><i></i><i></i></span><span id="clean-progress-stage"></span> <span id="clean-progress-count" class="muted"></span></div>
+          <div class="bar" id="clean-progress-bar"><div></div></div>
+        </div>
+        <div id="clean-error" class="banner error" hidden></div>
+        <div id="clean-done" class="banner ok" hidden></div>
+      </div>
+
+      <div id="clean-results" class="card section" hidden>
+        <div class="clean-head">
+          <h2 id="clean-title" style="margin:0"></h2>
+          <div>
+            <button class="btn sm ghost" id="clean-all">Tick all</button>
+            <button class="btn sm ghost" id="clean-none">Untick all</button>
+          </div>
+        </div>
+        <p class="muted small" id="clean-sub"></p>
+        <div id="clean-list"></div>
       </div>
     </div>
 
@@ -326,36 +693,6 @@
           <button class="btn primary" id="save-map-btn" disabled>Save changes</button>
           <button class="btn ghost" id="revert-map-btn" disabled>Discard</button>
         </div>
-      </div>
-    </div>
-
-    <div id="clean-panel" role="tabpanel" hidden>
-      <div class="card">
-        <h2>Clean up a playlist</h2>
-        <p class="muted small" style="margin-top:-6px">Pick one of your playlists and what it should be. Genrefy lists the songs whose artists match none of those genres' keywords on Last.fm. You choose which to remove, and nothing changes until you confirm.</p>
-        <div class="source-row">
-          <select id="clean-playlist" aria-label="Playlist to clean up"></select>
-          <select id="clean-genre" aria-label="Genres the playlist should match"></select>
-          <button class="btn primary" id="clean-btn">Find songs</button>
-        </div>
-        <div id="clean-progress" class="progress" hidden>
-          <div class="small"><span id="clean-progress-stage"></span> <span id="clean-progress-count" class="muted"></span></div>
-          <div class="bar" id="clean-progress-bar"><div></div></div>
-        </div>
-        <div id="clean-error" class="banner error" hidden></div>
-        <div id="clean-done" class="banner ok" hidden></div>
-      </div>
-
-      <div id="clean-results" class="card section" hidden>
-        <div class="clean-head">
-          <h2 id="clean-title" style="margin:0"></h2>
-          <div>
-            <button class="btn sm ghost" id="clean-all">Tick all</button>
-            <button class="btn sm ghost" id="clean-none">Untick all</button>
-          </div>
-        </div>
-        <p class="muted small" id="clean-sub"></p>
-        <div id="clean-list"></div>
       </div>
     </div>
   </section>
@@ -416,7 +753,7 @@ function h(tag, props, ...kids) {
 
 async function api(method, path, body) {
   const opts = { method, headers: {} };
-  if (method !== "GET") opts.headers["X-Genrefy"] = "1";
+  if (method !== "GET") opts.headers["X-Spotassist"] = "1";
   if (body !== undefined) {
     opts.headers["Content-Type"] = "application/json";
     opts.body = JSON.stringify(body);
@@ -463,6 +800,7 @@ function showLogin(error) {
   $("applybar").hidden = true;
   $("cleanbar").hidden = true;
   $("login-view").hidden = false;
+  zoomTo("overview");
   show($("login-error"), error);
 }
 
@@ -472,17 +810,111 @@ async function showApp() {
   $("app-view").hidden = false;
   $("user-area").hidden = false;
   $("user-name").textContent = state.user.name;
+  setTimeout(() => selectTab("sort"), 350);  // let the overview land first, then fly to the booth
   await loadPlaylists();
   await loadGenreMap();
 }
 
+const ROOMS = ["sort", "clean", "map"];
+
 function selectTab(which) {
-  for (const tab of ["sort", "map", "clean"]) {
+  for (const tab of ROOMS) {
     $("tab-" + tab).setAttribute("aria-selected", tab === which);
     $(tab + "-panel").hidden = tab !== which;
   }
+  document.body.dataset.room = which;
+  zoomTo(which);
   renderApplyBar();
   renderCleanBar();
+}
+
+// ---------------------------------------------------------------- the club scene
+
+// viewBox for each part of the club: [x, y, width, height], all at the scene's 1200:440 shape
+const VIEWS = {
+  overview: [0, 0, 1200, 440],
+  sort: [0, 80, 600, 220],
+  clean: [600, 76, 600, 220],
+  map: [330, 220, 600, 220],
+};
+let camera = VIEWS.overview.slice();
+let cameraFrame = 0;
+
+function zoomTo(name) {
+  const svg = $("scene");
+  const target = VIEWS[name] || VIEWS.overview;
+  $("club").dataset.view = name;
+  cancelAnimationFrame(cameraFrame);
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const from = camera.slice();
+  const centre = (v) => [v[0] + v[2] / 2, v[1] + v[3] / 2, v[2]];
+  const [fx, fy, fw] = centre(from), [tx, ty, tw] = centre(target);
+  // moving between two rooms swoops out a little, like a camera pulling back and pushing in
+  const swoop = fw < 1200 && tw < 1200 && fx !== tx ? 420 : 0;
+  const duration = reduce ? 0 : 1150;
+  const start = performance.now();
+  const ease = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
+  const step = (now) => {
+    const t = duration ? Math.min(1, (now - start) / duration) : 1;
+    const k = ease(t);
+    const w = fw + (tw - fw) * k + Math.sin(Math.PI * k) * swoop;
+    const h = w * 440 / 1200;
+    const cx = fx + (tx - fx) * k, cy = fy + (ty - fy) * k;
+    camera = [cx - w / 2, cy - h / 2, w, h];
+    svg.setAttribute("viewBox", camera.map((v) => v.toFixed(2)).join(" "));
+    if (t < 1) cameraFrame = requestAnimationFrame(step);
+  };
+  cameraFrame = requestAnimationFrame(step);
+}
+
+function buildScene() {
+  const NS = "http://www.w3.org/2000/svg";
+  const svgEl = (tag, attrs) => {
+    const el = document.createElementNS(NS, tag);
+    for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v);
+    return el;
+  };
+  // dance floor: a grid of light-up tiles in perspective
+  const tiles = $("tiles");
+  const rows = 4, cols = 8, top = 318, bottom = 436;
+  const edge = (r) => {
+    const s = Math.pow(r / rows, 1.25);
+    const y = top + (bottom - top) * s;
+    return { y, left: 450 + (330 - 450) * s, right: 840 + (960 - 840) * s };
+  };
+  for (let r = 0; r < rows; r++) {
+    const a = edge(r), b = edge(r + 1);
+    for (let c = 0; c < cols; c++) {
+      const x = (e, i) => e.left + (e.right - e.left) * (i / cols);
+      const points = [[x(a, c), a.y], [x(a, c + 1), a.y], [x(b, c + 1), b.y], [x(b, c), b.y]];
+      tiles.append(svgEl("polygon", {
+        class: "tile", points: points.map((pt) => pt.join(",")).join(" "),
+        style: `animation-delay:-${((r * 3 + c * 5) % 8) * 0.4}s`,
+      }));
+    }
+  }
+  // light specks thrown around the room by the disco ball
+  const colors = ["#ffffff", "#ff2e88", "#22e4ff", "#ffc23a", "#b8ff3c"];
+  const dots = $("reflections");
+  for (let i = 0; i < 46; i++) {
+    const seed = Math.sin(i * 91.7) * 10000;
+    const rand = (n) => Math.abs(Math.sin(seed + n)) % 1;
+    dots.append(svgEl("circle", {
+      class: "dot", cx: (rand(1) * 1200).toFixed(0), cy: (30 + rand(2) * 270).toFixed(0),
+      r: (1 + rand(3) * 2.4).toFixed(1), fill: colors[i % colors.length],
+      style: `animation-duration:${(5 + rand(4) * 7).toFixed(1)}s;animation-delay:-${(rand(5) * 10).toFixed(1)}s`,
+    }));
+  }
+  if (matchMedia("(prefers-reduced-motion: reduce)").matches) $("scene").pauseAnimations();
+  // click a part of the club to go there; click the room you're in to step back out
+  for (const spot of document.querySelectorAll(".hotspot")) {
+    spot.addEventListener("click", () => {
+      if (!state.user) return;
+      const room = spot.dataset.room;
+      if ($("club").dataset.view === room) zoomTo("overview");
+      else selectTab(room);
+    });
+  }
 }
 
 // ---------------------------------------------------------------- playlists
@@ -981,7 +1413,7 @@ function renderCleanup() {
   const unknown = c.off.filter((t) => t.unknown);
   $("clean-list").replaceChildren(
     ...tagged.map(row),
-    unknown.length ? h("div", { class: "clean-group" }, `No Last.fm tags, so Genrefy can't tell (${unknown.length}). Unticked by default.`) : null,
+    unknown.length ? h("div", { class: "clean-group" }, `No Last.fm tags, so Spotassist can't tell (${unknown.length}). Unticked by default.`) : null,
     ...unknown.map(row));
 }
 
@@ -1066,6 +1498,8 @@ $("tag-dialog-new").onkeydown = (e) => {
 
 window.addEventListener("beforeunload", (e) => { if (state.dirty) e.preventDefault(); });
 
+buildScene();
+
 (async function init() {
   const params = new URLSearchParams(location.search);
   const loginError = params.get("login_error");
@@ -1074,7 +1508,7 @@ window.addEventListener("beforeunload", (e) => { if (state.dirty) e.preventDefau
   try {
     status = await api("GET", "/api/status");
   } catch (err) {
-    $("loading").textContent = "Couldn't reach Genrefy: " + err.message;
+    $("loading").textContent = "Couldn't reach Spotassist: " + err.message;
     return;
   }
   if (!status.user) { showLogin(loginError && `Spotify login failed: ${loginError}`); return; }

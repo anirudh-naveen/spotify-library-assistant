@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 """
-Genrefy web UI
+Spotassist web UI
 
-A local web page for Genrefy: log in to Spotify, preview where songs would go,
+A local web page for Spotassist: log in to Spotify, preview where songs would go,
 apply it, and edit the genre map. It runs on your own computer only, at the
 Spotify redirect address (http://127.0.0.1:8888 by default).
 
 Usage:
-    python genrefy_web.py              # starts the server and opens your browser
-    python genrefy_web.py --no-browser
+    python spotassist_web.py              # starts the server and opens your browser
+    python spotassist_web.py --no-browser
 """
 
 import argparse
@@ -85,7 +85,7 @@ class App:
         return core.read_genre_config(self.map_path)
 
     def save_genre_config(self, config):
-        core.parse_genre_map(config)  # raises GenrefyError if invalid
+        core.parse_genre_map(config)  # raises SpotassistError if invalid
         self.map_path.write_text(json.dumps(config, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
 
     # --- background jobs (one at a time)
@@ -99,7 +99,7 @@ class App:
     def _start(self, kind, work):
         with self.lock:
             if self.job and self.job["status"] == "running":
-                raise core.GenrefyError("Genrefy is still working on the last request.")
+                raise core.SpotassistError("Spotassist is still working on the last request.")
             job = {"id": secrets.token_hex(8), "kind": kind, "status": "running", "stage": "Starting",
                    "done": 0, "total": 0, "log": [], "error": None, "result": None}
             self.job = job
@@ -108,7 +108,7 @@ class App:
             try:
                 job["result"] = work(job)
                 job["status"] = "done"
-            except core.GenrefyError as e:
+            except core.SpotassistError as e:
                 job["error"] = str(e)
                 job["status"] = "error"
             except Exception as e:  # show something useful instead of a stuck spinner
@@ -121,7 +121,7 @@ class App:
 
     def start_preview(self, source, filters=None):
         if not source.strip():
-            raise core.GenrefyError("Pick a source playlist first.")
+            raise core.SpotassistError("Pick a source playlist first.")
         filters = core.parse_date_filters(filters if isinstance(filters, dict) else {})
         genres, unsorted = core.load_genre_map(self.map_path)
 
@@ -142,9 +142,9 @@ class App:
         with self.lock:
             plan = self.plan
             if not plan or plan["id"] != plan_id:
-                raise core.GenrefyError("That preview is out of date. Run the preview again.")
+                raise core.SpotassistError("That preview is out of date. Run the preview again.")
             if plan["applied"]:
-                raise core.GenrefyError("That preview was already applied. Run the preview again to add newer songs.")
+                raise core.SpotassistError("That preview was already applied. Run the preview again to add newer songs.")
             plan["applied"] = True  # set before starting, so a double click can't apply twice
 
         def work(job):
@@ -156,9 +156,9 @@ class App:
 
     def start_cleanup(self, playlist, genre_names):
         if not playlist.strip():
-            raise core.GenrefyError("Pick a playlist to clean up.")
+            raise core.SpotassistError("Pick a playlist to clean up.")
         if not isinstance(genre_names, list) or not all(isinstance(g, str) for g in genre_names):
-            raise core.GenrefyError("Pick the genre the playlist should match.")
+            raise core.SpotassistError("Pick the genre the playlist should match.")
         genres, _ = core.load_genre_map(self.map_path)
 
         def work(job):
@@ -175,15 +175,15 @@ class App:
 
     def start_remove(self, cleanup_id, uris):
         if not isinstance(uris, list) or not uris:
-            raise core.GenrefyError("Tick at least one song to remove.")
+            raise core.SpotassistError("Tick at least one song to remove.")
         with self.lock:
             cleanup = self.cleanup
             if not cleanup or cleanup["id"] != cleanup_id:
-                raise core.GenrefyError("That list is out of date. Find the songs again.")
+                raise core.SpotassistError("That list is out of date. Find the songs again.")
             already = set(cleanup["removed"])
             uris = [str(u) for u in uris if str(u) not in already]
             if not uris:
-                raise core.GenrefyError("Those songs were already removed.")
+                raise core.SpotassistError("Those songs were already removed.")
             cleanup["removed"].extend(uris)  # before starting, so a double click can't remove twice
 
         def work(job):
@@ -193,7 +193,7 @@ class App:
 
         try:
             return self._start("remove", work)
-        except core.GenrefyError:
+        except core.SpotassistError:
             with self.lock:  # never started, so those songs weren't removed after all
                 cleanup["removed"] = [u for u in cleanup["removed"] if u not in uris]
             raise
@@ -233,18 +233,18 @@ class Handler(http.server.BaseHTTPRequestHandler):
     def _body(self):
         length = int(self.headers.get("Content-Length") or 0)
         if length > MAX_BODY:
-            raise core.GenrefyError("Request too large.")
+            raise core.SpotassistError("Request too large.")
         try:
             return json.loads(self.rfile.read(length) or b"{}")
         except json.JSONDecodeError:
-            raise core.GenrefyError("Request wasn't valid JSON.")
+            raise core.SpotassistError("Request wasn't valid JSON.")
 
     def _trusted(self, write):
         """Only answer pages served from this server. The Host check blocks DNS-rebinding;
         requiring a custom header on writes means other websites can't post here."""
         if self.headers.get("Host") not in self.allowed_hosts:
             return False
-        return not write or self.headers.get("X-Genrefy") == "1"
+        return not write or self.headers.get("X-Spotassist") == "1"
 
     def _handle(self, routes, write):
         if not self._trusted(write):
@@ -257,7 +257,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             route(urllib.parse.parse_qs(parsed.query))
         except core.NotLoggedIn as e:
             self._error(str(e), 401)
-        except core.GenrefyError as e:
+        except core.SpotassistError as e:
             self._error(str(e))
 
     def do_GET(self):
@@ -308,8 +308,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
     def page(self, query):
         self._send(200, INDEX_FILE.read_bytes(), "text/html; charset=utf-8", {
+            # fonts come from Google Fonts; everything else is served by this page itself
             "Content-Security-Policy": "default-src 'self'; script-src 'self' 'unsafe-inline'; "
-                                       "style-src 'self' 'unsafe-inline'; img-src 'self' data:; "
+                                       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+                                       "font-src https://fonts.gstatic.com; img-src 'self' data:; "
                                        "frame-ancestors 'none'",
         })
 
@@ -327,7 +329,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self._redirect("/?login_error=" + urllib.parse.quote("login didn't match; try again"))
         try:
             self.app.auth.exchange_code(q["code"], verifier)
-        except core.GenrefyError as e:
+        except core.SpotassistError as e:
             return self._redirect("/?login_error=" + urllib.parse.quote(str(e)))
         self.app.user = None
         self._redirect("/")
@@ -342,7 +344,7 @@ def main():
     core.load_env()
     try:
         app = App(args.map)
-    except core.GenrefyError as e:
+    except core.SpotassistError as e:
         sys.exit(str(e))
 
     # Serve on the Spotify redirect address, so Spotify sends the login straight back here.
@@ -357,7 +359,7 @@ def main():
     try:
         server = http.server.ThreadingHTTPServer((host, port), Handler)
     except OSError as e:
-        sys.exit(f"Couldn't start on {host}:{port} ({e}). Is Genrefy already running?")
+        sys.exit(f"Couldn't start on {host}:{port} ({e}). Is Spotassist already running?")
 
     url = f"http://{host}:{port}/"
     print(f"{core.APP_NAME} is running at {url}  (Ctrl+C to stop)")

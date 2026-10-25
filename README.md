@@ -1,6 +1,6 @@
-# Genrefy
+# Spotassist
 
-Genrefy sorts a big Spotify playlist into smaller genre playlists.
+Spotassist sorts a big Spotify playlist into smaller genre playlists.
 
 You point it at a source playlist. For each song it looks up the artist's top
 tags on [Last.fm](https://www.last.fm/api/show/artist.getTopTags), then appends
@@ -8,7 +8,7 @@ the song to every genre playlist whose keywords match. The keywords and
 playlists come from `genre_map.json`, which you edit. A song can land in more
 than one playlist.
 
-Genrefy only adds songs: anything already in a target playlist is skipped, so
+Spotassist only adds songs: anything already in a target playlist is skipped, so
 re-running it after you add songs to the source picks up just the new ones. Songs
 that matched nothing are listed in `unmatched.txt` along with their Last.fm tags,
 so you can see which keywords to add.
@@ -46,7 +46,7 @@ pip install -r requirements.txt
    Spotify doesn't accept `localhost`; use the loopback IP.
 4. Under **Which API/SDKs are you planning to use?**, tick **Web API**, then save.
 5. Open the app's **Settings** and copy the **Client ID**. You don't need the
-   client secret: Genrefy logs in with PKCE.
+   client secret: Spotassist logs in with PKCE.
 6. New apps start in Development mode, where only allowlisted accounts can log
    in. If someone other than the app owner will use it, add their Spotify email
    under **User Management**.
@@ -79,7 +79,7 @@ Values already set in your environment take precedence over `.env`.
 ### Web UI
 
 ```bash
-python genrefy_web.py
+python spotassist_web.py
 ```
 
 This starts a small web server on your own computer and opens
@@ -105,7 +105,7 @@ The **Clean up** tab removes songs that don't fit a playlist:
 1. Pick one of your playlists and the genre(s) it should match. If several genres
    go to that playlist, "Any genre that goes here" is picked for you, so songs
    from all of them count as fitting.
-2. Click **Find songs**. Genrefy lists every song whose artists match none of
+2. Click **Find songs**. Spotassist lists every song whose artists match none of
    those genres' keywords, along with their Last.fm tags so you can see why.
    Nothing changes yet.
 3. Every listed song starts ticked, except ones whose artists have no Last.fm
@@ -191,7 +191,7 @@ like this:
   playlist. The web UI also stores the playlist's ID (`"playlist_id"`), so
   renaming the playlist in Spotify doesn't break anything.
 - Playlist names are matched case-insensitively against playlists you own. If
-  there's no match, Genrefy creates a private playlist with that name.
+  there's no match, Spotassist creates a private playlist with that name.
 - Keywords are Last.fm tags. A song joins a genre when one of its artist's top
   tags equals a keyword. Tags are compared whole, so `pop` doesn't match `k pop`.
 - Older files that use `"playlists"` instead of `"genres"` still work. Saving
@@ -220,7 +220,7 @@ After a run, check `unmatched.txt` for tags you could add as keywords.
   `favorites`), and lesser-known artists may have none.
 - **Name collisions.** Last.fm looks artists up by name, so two artists who share
   a name get the same tags.
-- **Same-song detection is best effort.** Besides exact track IDs, Genrefy treats
+- **Same-song detection is best effort.** Besides exact track IDs, Spotassist treats
   two tracks as the same song if they share an ISRC (the recording's industry
   ID), or if they have the same title and main artist and lengths within 4
   seconds. Title extras like "(feat. X)", "- 2011 Remaster" or "- Radio Edit" are
@@ -232,12 +232,12 @@ After a run, check `unmatched.txt` for tags you could add as keywords.
   sorted.
 - **Local files and podcast episodes are skipped.** The Web API can't add them to
   playlists.
-- **Your own playlists only.** Genrefy can only add to playlists you own or that
+- **Your own playlists only.** Spotassist can only add to playlists you own or that
   are collaborative. If a playlist you only follow has the same name as a genre's
-  playlist, Genrefy uses your own playlist when you have one, and otherwise stops
+  playlist, Spotassist uses your own playlist when you have one, and otherwise stops
   so you can pick a different playlist. Spotify may also refuse to let the app read a source playlist
   you don't own; copy its songs into your own playlist first.
-- **API changes.** Genrefy targets Spotify's February 2026 Web API
+- **API changes.** Spotassist targets Spotify's February 2026 Web API
   (`/playlists/{id}/items`, `POST /me/playlists`). Older or future API versions
   may need changes.
 
@@ -246,7 +246,7 @@ After a run, check `unmatched.txt` for tags you could add as keywords.
 | File | What it is |
 | --- | --- |
 | `sort_by_genre.py` | Core logic and the command line tool |
-| `genrefy_web.py` | Local web server for the web UI |
+| `spotassist_web.py` | Local web server for the web UI |
 | `web/index.html` | The web page: plain HTML, CSS and JS, no build step |
 | `genre_map.json` | Your genre playlists and their keywords |
 | `tests/` | pytest tests, no network needed |
@@ -263,3 +263,5 @@ The tests cover the pure logic only and make no network calls.
 ## License
 
 [MIT](LICENSE)
+
+Spotassist is an independent project. It isn't affiliated with, endorsed by or sponsored by Spotify.

@@ -118,14 +118,14 @@ def test_build_plan_progress_reports_each_track(world):
 def test_build_plan_refuses_playlists_you_dont_own(world):
     sp, lastfm, genre_map = world
     sp.playlists.append(playlist("theirs", "Pop", owner="someone"))
-    with pytest.raises(sbg.GenrefyError, match="isn't your playlist"):
+    with pytest.raises(sbg.SpotassistError, match="isn't your playlist"):
         sbg.build_plan(sp, lastfm, "Big Mix", genre_map, None)
 
 
 def test_build_plan_unreadable_source(world):
     sp, lastfm, genre_map = world
     sp.playlists.append(playlist("gone", "Gone"))
-    with pytest.raises(sbg.GenrefyError, match="Couldn't read the source"):
+    with pytest.raises(sbg.SpotassistError, match="Couldn't read the source"):
         sbg.build_plan(sp, lastfm, "Gone", genre_map, None)
 
 
@@ -145,7 +145,7 @@ def test_resolve_source_fills_name_for_ids():
     pid = "37i9dQZF1DXcBWIGoYBM5M"
     by_name = sbg.index_by_name([playlist(pid, "Chill")], ME)
     assert sbg.resolve_source(pid, by_name) == (pid, "Chill")
-    with pytest.raises(sbg.GenrefyError):
+    with pytest.raises(sbg.SpotassistError):
         sbg.resolve_source("nope", by_name)
 
 
@@ -176,7 +176,7 @@ def test_new_playlist_with_custom_name(world):
 def test_chosen_playlist_missing(world):
     sp, lastfm, _ = world
     genres, _ = sbg.parse_genre_map({"genres": {"Pop": {"keywords": ["pop"], "playlist_id": "deleted"}}})
-    with pytest.raises(sbg.GenrefyError, match="isn't in your library anymore"):
+    with pytest.raises(sbg.SpotassistError, match="isn't in your library anymore"):
         sbg.build_plan(sp, lastfm, "Big Mix", genres)
 
 
@@ -254,7 +254,7 @@ def test_cleanup_with_several_genres(messy):
 ])
 def test_cleanup_refuses(messy, playlist, genres_arg, message):
     sp, lastfm, genres = messy
-    with pytest.raises(sbg.GenrefyError, match=message):
+    with pytest.raises(sbg.SpotassistError, match=message):
         sbg.build_cleanup(sp, lastfm, playlist, genres_arg, genres)
 
 

@@ -191,14 +191,14 @@ def test_date_bound(value, end, expected):
 
 @pytest.mark.parametrize("bad", ["19", "2019/05/01", "May 2019"])
 def test_date_bound_rejects(bad):
-    with pytest.raises(sbg.GenrefyError):
+    with pytest.raises(sbg.SpotassistError):
         sbg.date_bound(bad)
 
 
 def test_parse_date_filters():
     assert sbg.parse_date_filters({"added_after": "2024", "released_before": "2010", "released_after": ""}) == {
         "added_after": "2024-01-01", "released_before": "2010-12-31"}
-    with pytest.raises(sbg.GenrefyError, match="ends before it starts"):
+    with pytest.raises(sbg.SpotassistError, match="ends before it starts"):
         sbg.parse_date_filters({"added_after": "2024-06-01", "added_before": "2024-01-01"})
 
 
@@ -264,7 +264,7 @@ def test_parse_genre_map_custom_playlists():
     [],
 ])
 def test_parse_genre_map_rejects(config):
-    with pytest.raises(sbg.GenrefyError):
+    with pytest.raises(sbg.SpotassistError):
         sbg.parse_genre_map(config)
 
 

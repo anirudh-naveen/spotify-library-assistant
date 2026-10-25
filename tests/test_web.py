@@ -5,7 +5,7 @@ import time
 
 import pytest
 
-import genrefy_web as web
+import spotassist_web as web
 import sort_by_genre as sbg
 
 
@@ -37,7 +37,7 @@ def hosts():
     ({"Host": "localhost:8888"}, False, True),
     ({"Host": "evil.example:8888"}, False, False),          # DNS rebinding
     ({"Host": "127.0.0.1:8888"}, True, False),              # write without the custom header
-    ({"Host": "127.0.0.1:8888", "X-Genrefy": "1"}, True, True),
+    ({"Host": "127.0.0.1:8888", "X-Spotassist": "1"}, True, True),
 ])
 def test_trusted_requests(headers, write, ok):
     assert FakeHandler(headers)._trusted(write) is ok
@@ -45,7 +45,7 @@ def test_trusted_requests(headers, write, ok):
 
 def test_save_genre_config_validates_and_keeps_extra_keys(tmp_path):
     app = make_app(tmp_path)
-    with pytest.raises(sbg.GenrefyError):
+    with pytest.raises(sbg.SpotassistError):
         app.save_genre_config({"playlists": {"Pop": []}})
     config = {"_help": "keep me", "genres": {"Rock": {"keywords": ["rock"], "playlist": "Loud", "playlist_id": "x"}},
               "unsorted_playlist": None}
@@ -68,11 +68,11 @@ def test_apply_only_once_and_only_latest_preview(tmp_path, monkeypatch):
     monkeypatch.setattr(sbg, "apply_plan", lambda sp, plan, report: calls.append(plan["id"]))
     app.plan = {"id": "p1", "applied": False, "targets": []}
 
-    with pytest.raises(sbg.GenrefyError, match="out of date"):
+    with pytest.raises(sbg.SpotassistError, match="out of date"):
         app.start_apply("old")
     app.start_apply("p1")
     assert wait(app)["status"] == "done"
-    with pytest.raises(sbg.GenrefyError, match="already applied"):
+    with pytest.raises(sbg.SpotassistError, match="already applied"):
         app.start_apply("p1")
     assert calls == ["p1"]
 
@@ -81,7 +81,7 @@ def test_job_errors_are_reported(tmp_path, monkeypatch):
     app = make_app(tmp_path)
 
     def boom(job):
-        raise sbg.GenrefyError("Last.fm rejected the API key.")
+        raise sbg.SpotassistError("Last.fm rejected the API key.")
 
     app._start("preview", boom)
     job = wait(app)
@@ -95,13 +95,13 @@ def test_remove_guards(tmp_path, monkeypatch):
     monkeypatch.setattr(sbg, "apply_cleanup", lambda sp, c, uris, report: removed.append(list(uris)) or len(uris))
     app.cleanup = {"id": "c1", "removed": [], "off": [{"uri": "a"}, {"uri": "b"}]}
 
-    with pytest.raises(sbg.GenrefyError, match="Tick at least one"):
+    with pytest.raises(sbg.SpotassistError, match="Tick at least one"):
         app.start_remove("c1", [])
-    with pytest.raises(sbg.GenrefyError, match="out of date"):
+    with pytest.raises(sbg.SpotassistError, match="out of date"):
         app.start_remove("old", ["a"])
     app.start_remove("c1", ["a"])
     wait(app)
-    with pytest.raises(sbg.GenrefyError, match="already removed"):
+    with pytest.raises(sbg.SpotassistError, match="already removed"):
         app.start_remove("c1", ["a"])
     app.start_remove("c1", ["a", "b"])   # a second batch from the same list works
     wait(app)
@@ -112,6 +112,6 @@ def test_remove_rolls_back_if_busy(tmp_path):
     app = make_app(tmp_path)
     app.cleanup = {"id": "c1", "removed": [], "off": [{"uri": "a"}]}
     app.job = {"status": "running"}
-    with pytest.raises(sbg.GenrefyError, match="still working"):
+    with pytest.raises(sbg.SpotassistError, match="still working"):
         app.start_remove("c1", ["a"])
     assert app.cleanup["removed"] == []

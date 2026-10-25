@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Genrefy
+Spotassist
 
 Reads a source Spotify playlist, looks up each track's artist on Last.fm to get
 genre tags, and appends the track to every genre playlist whose keywords match
@@ -12,7 +12,7 @@ Usage:
     python sort_by_genre.py "My Big Playlist"             # actually add songs
     python sort_by_genre.py https://open.spotify.com/playlist/XXXX
 
-For a browser UI instead, run: python genrefy_web.py
+For a browser UI instead, run: python spotassist_web.py
 """
 
 import argparse
@@ -32,7 +32,7 @@ from pathlib import Path
 
 import requests
 
-APP_NAME = "Genrefy"
+APP_NAME = "Spotassist"
 
 HERE = Path(__file__).resolve().parent
 ENV_FILE = HERE / ".env"
@@ -57,11 +57,11 @@ MAX_RETRY_WAIT = 300  # give up rather than sleep longer than this on a 429
 LOGIN_TIMEOUT = 300
 
 
-class GenrefyError(Exception):
+class SpotassistError(Exception):
     """A problem to show the user as a plain message, without a traceback."""
 
 
-class NotLoggedIn(GenrefyError):
+class NotLoggedIn(SpotassistError):
     pass
 
 
@@ -82,7 +82,7 @@ def load_env():
 def require_env(name):
     value = os.environ.get(name, "")
     if not value or value.startswith("paste_"):
-        raise GenrefyError(f"Missing {name}. Copy .env.example to .env and fill it in.")
+        raise SpotassistError(f"Missing {name}. Copy .env.example to .env and fill it in.")
     return value
 
 
@@ -189,7 +189,7 @@ class SpotifyAuth:
             "code_verifier": verifier,
         }, timeout=30)
         if not r.ok:
-            raise GenrefyError(f"Spotify login failed: {r.status_code} {r.text[:300]}")
+            raise SpotassistError(f"Spotify login failed: {r.status_code} {r.text[:300]}")
         with self._lock:
             self._save(r.json())
 
@@ -201,8 +201,8 @@ class SpotifyAuth:
         try:
             server = http.server.HTTPServer((parsed.hostname, parsed.port or 80), _CallbackHandler)
         except OSError as e:
-            raise GenrefyError(f"Couldn't listen on {parsed.hostname}:{parsed.port} for the Spotify login "
-                               f"({e}). Is something else (like genrefy_web.py) using that port?")
+            raise SpotassistError(f"Couldn't listen on {parsed.hostname}:{parsed.port} for the Spotify login "
+                               f"({e}). Is something else (like spotassist_web.py) using that port?")
         server.timeout = 1
 
         print("Opening your browser to log in to Spotify...")
@@ -217,11 +217,11 @@ class SpotifyAuth:
 
         result = _CallbackHandler.result
         if not result:
-            raise GenrefyError("Spotify login failed: no response within 5 minutes.")
+            raise SpotassistError("Spotify login failed: no response within 5 minutes.")
         if "error" in result:
-            raise GenrefyError(f"Spotify login failed: {result['error']}")
+            raise SpotassistError(f"Spotify login failed: {result['error']}")
         if result.get("state") != state or "code" not in result:
-            raise GenrefyError("Spotify login failed: the response didn't match this login attempt. Try again.")
+            raise SpotassistError("Spotify login failed: the response didn't match this login attempt. Try again.")
         self.exchange_code(result["code"], verifier)
 
     def _refresh(self):
@@ -266,7 +266,7 @@ class SpotifyAuth:
 
 # ---------------------------------------------------------------- Spotify API
 
-class SpotifyError(GenrefyError):
+class SpotifyError(SpotassistError):
     def __init__(self, status, method, url, text):
         super().__init__(f"Spotify error {status} on {method} {url}:\n{text[:400]}")
         self.status = status
@@ -298,7 +298,7 @@ class Spotify:
             if r.status_code == 429:  # rate limited: wait as told
                 wait = retry_after_seconds(r.headers)
                 if wait > MAX_RETRY_WAIT:
-                    raise GenrefyError(f"Spotify rate-limited this app for {int(wait)} seconds. Try again later.")
+                    raise SpotassistError(f"Spotify rate-limited this app for {int(wait)} seconds. Try again later.")
                 time.sleep(wait + 1)
                 continue
             if r.status_code >= 500:
@@ -307,7 +307,7 @@ class Spotify:
             if not r.ok:
                 raise SpotifyError(r.status_code, method, url, r.text)
             return r.json() if r.content else {}
-        raise GenrefyError(f"Spotify kept failing on {method} {url}; try again later.")
+        raise SpotassistError(f"Spotify kept failing on {method} {url}; try again later.")
 
     def paged(self, url, params=None):
         data = self.call("GET", url, params=params)
@@ -394,7 +394,7 @@ class LastFM:
             # Last.fm reports errors in the JSON body, sometimes with a 200, sometimes not
             error = data.get("error")
             if error in (10, 26) or (r.status_code == 403 and error is None):
-                raise GenrefyError("Last.fm rejected the API key. Check LASTFM_API_KEY in .env.")
+                raise SpotassistError("Last.fm rejected the API key. Check LASTFM_API_KEY in .env.")
             if error == 29 or r.status_code == 429:  # rate limit exceeded
                 time.sleep(5 * (attempt + 1))
                 continue
@@ -457,10 +457,10 @@ def parse_genre_map(config, source="genre map"):
     The older top-level key "playlists" is read the same way as "genres".
     """
     if not isinstance(config, dict):
-        raise GenrefyError(f"{source} must be a JSON object.")
+        raise SpotassistError(f"{source} must be a JSON object.")
     raw = config.get("genres") if "genres" in config else config.get("playlists")
     if raw is not None and not isinstance(raw, dict):
-        raise GenrefyError(f'{source}: "genres" must be an object.')
+        raise SpotassistError(f'{source}: "genres" must be an object.')
     genres = {}
     for genre, value in (raw or {}).items():
         genre = genre.strip()
@@ -472,12 +472,12 @@ def parse_genre_map(config, source="genre map"):
             keywords = [keywords]
         kws = {norm(k) for k in keywords or []} - {""}
         if not genre or not kws:
-            raise GenrefyError(f'{source}: genre "{genre}" needs a name and at least one keyword.')
+            raise SpotassistError(f'{source}: genre "{genre}" needs a name and at least one keyword.')
         if not target["playlist"] and not target["playlist_id"]:
-            raise GenrefyError(f'{source}: genre "{genre}" needs a playlist to go to.')
+            raise SpotassistError(f'{source}: genre "{genre}" needs a playlist to go to.')
         genres[genre] = {"keywords": kws, "target": target}
     if not genres:
-        raise GenrefyError(f"{source} has no genres defined.")
+        raise SpotassistError(f"{source} has no genres defined.")
     unsorted = parse_target(config.get("unsorted_playlist"))
     if not unsorted["playlist"] and not unsorted["playlist_id"]:
         unsorted = None
@@ -486,11 +486,11 @@ def parse_genre_map(config, source="genre map"):
 
 def read_genre_config(path=MAP_FILE):
     if not path.exists():
-        raise GenrefyError(f"Missing {path.name}. It should sit next to this script.")
+        raise SpotassistError(f"Missing {path.name}. It should sit next to this script.")
     try:
         return json.loads(path.read_text(encoding="utf-8"))
     except json.JSONDecodeError as e:
-        raise GenrefyError(f"{path.name} isn't valid JSON: {e}")
+        raise SpotassistError(f"{path.name} isn't valid JSON: {e}")
 
 
 def load_genre_map(path=MAP_FILE):
@@ -583,7 +583,7 @@ def date_bound(value, end=False):
     if not value:
         return ""
     if not re.fullmatch(r"\d{4}(-\d{2}(-\d{2})?)?", value):
-        raise GenrefyError(f'"{value}" isn\'t a date. Use YYYY, YYYY-MM or YYYY-MM-DD.')
+        raise SpotassistError(f'"{value}" isn\'t a date. Use YYYY, YYYY-MM or YYYY-MM-DD.')
     if len(value) == 4:
         return value + ("-12-31" if end else "-01-01")
     if len(value) == 7:
@@ -601,7 +601,7 @@ def parse_date_filters(raw):
     for kind in ("added", "released"):
         after, before = out.get(f"{kind}_after"), out.get(f"{kind}_before")
         if after and before and after > before:
-            raise GenrefyError(f"The {kind} date range ends before it starts.")
+            raise SpotassistError(f"The {kind} date range ends before it starts.")
     return out
 
 
@@ -678,7 +678,7 @@ def resolve_source(source, by_name):
         return match["id"], match.get("name")
     source_id = parse_playlist_id(source)
     if source_id is None:
-        raise GenrefyError(f'No playlist named "{source}" in your library.')
+        raise SpotassistError(f'No playlist named "{source}" in your library.')
     name = next((p.get("name") for p in by_name.values() if p.get("id") == source_id), None)
     return source_id, name
 
@@ -709,10 +709,10 @@ def build_plan(sp, lastfm, source, genres, unsorted=None, progress=None, filters
     def add_target(label, target):
         p = by_id.get(target["playlist_id"]) if target["playlist_id"] else by_name.get(target["playlist"].lower())
         if target["playlist_id"] and not p:
-            raise GenrefyError(f'The playlist chosen for "{label}" isn\'t in your library anymore. '
+            raise SpotassistError(f'The playlist chosen for "{label}" isn\'t in your library anymore. '
                                "Pick another one in the genre map.")
         if p and not can_edit(p, my_id):
-            raise GenrefyError(f'"{p.get("name")}" (for "{label}") isn\'t your playlist, so songs can\'t be '
+            raise SpotassistError(f'"{p.get("name")}" (for "{label}") isn\'t your playlist, so songs can\'t be '
                                "added to it. Pick a different playlist in the genre map.")
         key = p["id"] if p else "new:" + target["playlist"].lower()
         entry = targets.setdefault(key, {"name": p.get("name") if p else target["playlist"],
@@ -730,7 +730,7 @@ def build_plan(sp, lastfm, source, genres, unsorted=None, progress=None, filters
         all_tracks = [track_summary(t) for t in sp.playlist_tracks(source_id)]
     except SpotifyError as e:
         if e.status in (403, 404):
-            raise GenrefyError(
+            raise SpotassistError(
                 "Couldn't read the source playlist. It may not exist, or Spotify may not let "
                 "this app read it (playlists you don't own or collaborate on are often blocked). "
                 "Copy its songs into a playlist of your own and use that instead.")
@@ -811,10 +811,10 @@ def build_cleanup(sp, lastfm, playlist, genre_names, genres, progress=None):
     progress = progress or (lambda stage, done, total: None)
     names = [genre_names] if isinstance(genre_names, str) else list(dict.fromkeys(genre_names or []))
     if not names:
-        raise GenrefyError("Pick the genre the playlist should match.")
+        raise SpotassistError("Pick the genre the playlist should match.")
     missing = [g for g in names if g not in genres]
     if missing:
-        raise GenrefyError(f'There\'s no genre called "{missing[0]}" in the genre map.')
+        raise SpotassistError(f'There\'s no genre called "{missing[0]}" in the genre map.')
     keywords = {g: genres[g]["keywords"] for g in names}
 
     progress("Reading your playlists", 0, 0)
@@ -823,7 +823,7 @@ def build_cleanup(sp, lastfm, playlist, genre_names, genres, progress=None):
     playlist_id, _ = resolve_source(playlist, index_by_name(mine, my_id))
     p = next((x for x in mine if x.get("id") == playlist_id), None)
     if not p or not can_edit(p, my_id):
-        raise GenrefyError("You can only clean up playlists you own or collaborate on.")
+        raise SpotassistError("You can only clean up playlists you own or collaborate on.")
 
     progress("Reading the playlist", 0, 0)
     tracks, seen = [], set()
@@ -878,7 +878,7 @@ def main():
     parser = argparse.ArgumentParser(
         prog="sort_by_genre.py",
         description=f"{APP_NAME}: sort a Spotify playlist into genre playlists using Last.fm tags.",
-        epilog="For a browser UI, run: python genrefy_web.py",
+        epilog="For a browser UI, run: python spotassist_web.py",
     )
     parser.add_argument("source", help="Source playlist name, link, or ID")
     parser.add_argument("--dry-run", action="store_true", help="Preview without changing anything")
@@ -897,7 +897,7 @@ def main():
         sp = Spotify(SpotifyAuth())
         lastfm = LastFM()
         run(sp, lastfm, args, genres, unsorted)
-    except GenrefyError as e:
+    except SpotassistError as e:
         sys.exit(str(e))
 
 
