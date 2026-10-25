@@ -1,0 +1,14 @@
+# Secrets and local state
+.env
+.spotify_token.json
+lastfm_cache.json
+unmatched.txt
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+
+# OS
+.DS_Store
