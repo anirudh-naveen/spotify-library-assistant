@@ -76,6 +76,31 @@ Values already set in your environment take precedence over `.env`.
 
 ## Usage
 
+### Web UI
+
+```bash
+python genrefy_web.py
+```
+
+This starts a small web server on your own computer and opens
+http://127.0.0.1:8888 in your browser. From there you can:
+
+- log in to Spotify
+- pick a source playlist from your library, or paste a link
+- preview which songs would go to which genre playlist, with live progress
+- click **Add songs** to apply the preview
+- see the songs that matched nothing along with their Last.fm tags. Click a tag
+  to add it as a keyword for a genre playlist.
+- edit `genre_map.json` in the **Genre map** tab
+
+The server only answers requests from that page on your own computer. It uses
+the same address as the Spotify redirect URI, so stop it (Ctrl+C) before using
+the command line version's login. Use `--no-browser` to skip opening a tab, and
+`--map` to use a different genre map. Saving from the Genre map tab rewrites
+`genre_map.json` with standard JSON formatting.
+
+### Command line
+
 Preview first. `--dry-run` reads everything and shows what would be added, but
 doesn't create or change any Spotify playlists:
 
@@ -160,6 +185,16 @@ After a run, check `unmatched.txt` for tags you could add as keywords.
 - **API changes.** Genrefy targets Spotify's February 2026 Web API
   (`/playlists/{id}/items`, `POST /me/playlists`). Older or future API versions
   may need changes.
+
+## Project layout
+
+| File | What it is |
+| --- | --- |
+| `sort_by_genre.py` | Core logic and the command line tool |
+| `genrefy_web.py` | Local web server for the web UI |
+| `web/index.html` | The web page: plain HTML, CSS and JS, no build step |
+| `genre_map.json` | Your genre playlists and their keywords |
+| `tests/` | pytest tests, no network needed |
 
 ## Running tests
 

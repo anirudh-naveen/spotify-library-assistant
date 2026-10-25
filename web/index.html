@@ -1,0 +1,766 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Genrefy</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%236d5dfc'/%3E%3Cpath d='M9 22V10h3v12zm5.5 0V6h3v16zM20 22v-8h3v8z' fill='white'/%3E%3C/svg%3E">
+<style>
+  :root {
+    --bg: #f6f6f9;
+    --surface: #ffffff;
+    --surface-2: #f0f0f5;
+    --border: #e2e2ea;
+    --text: #17171c;
+    --muted: #6b6b78;
+    --accent: #6d5dfc;
+    --accent-text: #ffffff;
+    --accent-soft: #ecebff;
+    --good: #1a7f4b;
+    --good-soft: #e3f5ec;
+    --warn: #9a5b00;
+    --warn-soft: #fff1dc;
+    --bad: #b42318;
+    --bad-soft: #fde8e6;
+    --shadow: 0 1px 2px rgba(20, 20, 40, .06), 0 4px 16px rgba(20, 20, 40, .05);
+    --radius: 12px;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #101014;
+      --surface: #19191f;
+      --surface-2: #23232b;
+      --border: #2e2e38;
+      --text: #ececf1;
+      --muted: #9a9aa8;
+      --accent: #8b7dff;
+      --accent-text: #0f0d24;
+      --accent-soft: #29254a;
+      --good: #5fd39a;
+      --good-soft: #15301f;
+      --warn: #f3b555;
+      --warn-soft: #33260f;
+      --bad: #ff8a80;
+      --bad-soft: #3a1714;
+      --shadow: none;
+      color-scheme: dark;
+    }
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  button, input, select { font: inherit; color: inherit; }
+  [hidden] { display: none !important; }
+
+  header {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    padding: 14px 24px; border-bottom: 1px solid var(--border); background: var(--surface);
+    position: sticky; top: 0; z-index: 5;
+  }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 18px; letter-spacing: -.01em; }
+  .brand-mark { width: 28px; height: 28px; border-radius: 8px; background: var(--accent); display: grid; place-items: center; }
+  .user { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 14px; }
+
+  main { max-width: 1040px; margin: 0 auto; padding: 24px 16px 120px; }
+
+  .card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+    box-shadow: var(--shadow); padding: 20px;
+  }
+  .card + .card, .section { margin-top: 16px; }
+  h1 { font-size: 26px; letter-spacing: -.02em; margin: 0 0 8px; }
+  h2 { font-size: 16px; margin: 0 0 12px; }
+  .muted { color: var(--muted); }
+  .small { font-size: 13px; }
+
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    border: 1px solid var(--border); background: var(--surface); border-radius: 999px;
+    padding: 8px 16px; cursor: pointer; font-weight: 600; white-space: nowrap; text-decoration: none;
+  }
+  .btn:hover { background: var(--surface-2); }
+  .btn:disabled { opacity: .5; cursor: not-allowed; }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
+  .btn.primary:hover { filter: brightness(1.07); }
+  .btn.ghost { border-color: transparent; background: none; }
+  .btn.ghost:hover { background: var(--surface-2); }
+  .btn.danger { color: var(--bad); }
+  .btn.sm { padding: 4px 12px; font-size: 13px; }
+  .btn:focus-visible, input:focus-visible, select:focus-visible, .chip:focus-visible {
+    outline: 2px solid var(--accent); outline-offset: 2px;
+  }
+
+  input[type=text], select {
+    border: 1px solid var(--border); background: var(--surface); border-radius: 8px;
+    padding: 8px 12px; min-width: 0;
+  }
+
+  .login { max-width: 520px; margin: 48px auto; text-align: center; padding: 36px 28px; }
+  .login p { margin: 0 0 20px; }
+
+  .tabs { display: flex; gap: 4px; margin-bottom: 16px; border-bottom: 1px solid var(--border); }
+  .tab {
+    border: 0; background: none; padding: 10px 14px; cursor: pointer; font-weight: 600; color: var(--muted);
+    border-bottom: 2px solid transparent; margin-bottom: -1px;
+  }
+  .tab[aria-selected=true] { color: var(--text); border-bottom-color: var(--accent); }
+
+  .source-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  .source-row select { flex: 1 1 260px; }
+  .source-row input { flex: 1 1 220px; }
+  .or { color: var(--muted); font-size: 13px; }
+
+  .banner { border-radius: 10px; padding: 12px 14px; margin-top: 16px; white-space: pre-wrap; }
+  .banner.error { background: var(--bad-soft); color: var(--bad); }
+  .banner.ok { background: var(--good-soft); color: var(--good); }
+
+  .progress { margin-top: 16px; }
+  .bar { height: 6px; background: var(--surface-2); border-radius: 999px; overflow: hidden; margin-top: 8px; }
+  .bar > div { height: 100%; width: 0; background: var(--accent); transition: width .3s; }
+  .bar.indeterminate > div { width: 30%; animation: slide 1.2s ease-in-out infinite; }
+  @keyframes slide { from { transform: translateX(-100%); } to { transform: translateX(340%); } }
+
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; }
+  .stat { background: var(--surface-2); border-radius: 10px; padding: 12px 14px; }
+  .stat b { display: block; font-size: 22px; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+  .stat span { color: var(--muted); font-size: 13px; }
+
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
+  .target { padding: 16px; margin: 0 !important; }
+  .target-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+  .target-name { font-weight: 700; overflow-wrap: anywhere; }
+  .count { font-variant-numeric: tabular-nums; font-weight: 700; color: var(--accent); white-space: nowrap; }
+  .count.zero { color: var(--muted); font-weight: 500; }
+  .badge {
+    display: inline-block; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
+    background: var(--warn-soft); color: var(--warn); border-radius: 999px; padding: 2px 8px; margin-top: 6px;
+  }
+  details summary { cursor: pointer; color: var(--muted); font-size: 13px; margin-top: 8px; }
+  .songs { list-style: none; padding: 0; margin: 8px 0 0; font-size: 13px; max-height: 260px; overflow: auto; }
+  .songs li { padding: 4px 0; border-top: 1px solid var(--border); }
+  .songs li span { color: var(--muted); }
+
+  .unmatched-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); gap: 12px; padding: 10px 0; border-top: 1px solid var(--border); }
+  .unmatched-row .title { font-weight: 600; overflow-wrap: anywhere; }
+  .unmatched-row .artists { color: var(--muted); font-size: 13px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .chip {
+    display: inline-flex; align-items: center; gap: 4px; border: 1px solid var(--border); background: var(--surface-2);
+    border-radius: 999px; padding: 2px 10px; font-size: 13px; cursor: pointer;
+  }
+  .chip:hover { border-color: var(--accent); }
+  .chip.added { background: var(--accent-soft); border-color: var(--accent); }
+  .chip.static { cursor: default; }
+  .chip .x { border: 0; background: none; padding: 0 0 0 2px; cursor: pointer; color: var(--muted); font-size: 15px; line-height: 1; }
+  .chip .x:hover { color: var(--bad); }
+
+  .applybar {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 6;
+    background: var(--surface); border-top: 1px solid var(--border); box-shadow: 0 -4px 16px rgba(0,0,0,.06);
+  }
+  .applybar-inner { max-width: 1040px; margin: 0 auto; padding: 12px 16px; display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+
+  .map-row { display: grid; grid-template-columns: minmax(140px, 220px) minmax(0, 1fr) auto; gap: 12px; align-items: start; padding: 12px 0; border-top: 1px solid var(--border); }
+  .map-row:first-child { border-top: 0; }
+  .map-row .chips input { border: 1px dashed var(--border); background: none; border-radius: 999px; padding: 2px 10px; font-size: 13px; width: 140px; }
+  .map-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 16px; }
+  .field { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 16px; }
+
+  dialog {
+    border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); color: var(--text);
+    padding: 20px; width: min(420px, calc(100vw - 32px)); box-shadow: 0 12px 40px rgba(0,0,0,.25);
+  }
+  dialog::backdrop { background: rgba(10, 10, 20, .45); }
+  .pick { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+  .dialog-new { display: flex; gap: 8px; }
+  .dialog-new input { flex: 1; }
+
+  .toast {
+    position: fixed; left: 50%; bottom: 88px; transform: translateX(-50%); z-index: 10;
+    background: var(--text); color: var(--bg); padding: 10px 16px; border-radius: 10px; font-size: 14px;
+    max-width: calc(100vw - 32px); box-shadow: 0 8px 24px rgba(0,0,0,.2);
+  }
+  .log { font: 13px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace; margin: 8px 0 0; padding: 0; list-style: none; }
+
+  @media (max-width: 640px) {
+    header { padding: 12px 16px; }
+    .unmatched-row, .map-row { grid-template-columns: 1fr; }
+    .map-row > .btn { justify-self: start; }
+    .user .who { display: none; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">
+    <div class="brand-mark" aria-hidden="true">
+      <svg width="16" height="16" viewBox="0 0 32 32"><path d="M9 22V10h3v12zm5.5 0V6h3v16zM20 22v-8h3v8z" fill="white"/></svg>
+    </div>
+    Genrefy
+  </div>
+  <div class="user" id="user-area" hidden>
+    <span class="who">Signed in as <b id="user-name"></b></span>
+    <button class="btn sm" id="logout-btn">Log out</button>
+  </div>
+</header>
+
+<main>
+  <div id="loading" class="muted">Loading…</div>
+
+  <section id="login-view" class="card login" hidden>
+    <h1>Sort playlists by genre</h1>
+    <p class="muted">Genrefy reads a playlist, looks up each artist's genre tags on Last.fm, and adds the songs to the genre playlists you set up. Log in to get started.</p>
+    <a class="btn primary" href="/login">Log in with Spotify</a>
+    <div id="login-error" class="banner error" hidden></div>
+  </section>
+
+  <section id="app-view" hidden>
+    <div class="tabs" role="tablist">
+      <button class="tab" role="tab" id="tab-sort" aria-selected="true" aria-controls="sort-panel">Sort</button>
+      <button class="tab" role="tab" id="tab-map" aria-selected="false" aria-controls="map-panel">Genre map</button>
+    </div>
+
+    <div id="sort-panel" role="tabpanel">
+      <div class="card">
+        <h2>Source playlist</h2>
+        <div class="source-row">
+          <select id="source-select" aria-label="Source playlist"></select>
+          <span class="or">or</span>
+          <input type="text" id="source-link" placeholder="Paste a playlist link" aria-label="Playlist link">
+          <button class="btn primary" id="preview-btn">Preview</button>
+        </div>
+        <p class="muted small" style="margin:10px 0 0">Preview doesn't change anything in Spotify. You'll see exactly what will be added first.</p>
+        <div id="progress" class="progress" hidden>
+          <div class="small"><span id="progress-stage"></span> <span id="progress-count" class="muted"></span></div>
+          <div class="bar" id="progress-bar"><div></div></div>
+        </div>
+        <div id="sort-error" class="banner error" hidden></div>
+        <div id="apply-done" class="banner ok" hidden></div>
+      </div>
+
+      <div id="results" hidden>
+        <div class="card section">
+          <h2 id="results-title"></h2>
+          <div class="stats" id="stats"></div>
+        </div>
+        <div class="section">
+          <div class="grid" id="targets"></div>
+        </div>
+        <div class="card section" id="unmatched-card">
+          <h2 id="unmatched-title"></h2>
+          <p class="muted small" style="margin-top:-6px">Click a tag to add it to a genre playlist's keywords, then preview again.</p>
+          <div id="unmatched"></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="map-panel" role="tabpanel" hidden>
+      <div class="card">
+        <h2>Genre playlists</h2>
+        <p class="muted small" style="margin-top:-6px">A song goes to every playlist that has one of its artist's Last.fm tags as a keyword. Playlists that don't exist yet are created as private playlists.</p>
+        <div id="map-rows"></div>
+        <div class="map-actions">
+          <button class="btn" id="add-playlist-btn">+ Add playlist</button>
+        </div>
+        <div class="field">
+          <label for="unsorted-input"><b>Unsorted playlist</b> <span class="muted small">(optional, for songs that match nothing)</span></label>
+          <input type="text" id="unsorted-input" placeholder="Leave blank to skip">
+        </div>
+        <div id="map-error" class="banner error" hidden></div>
+        <div class="map-actions">
+          <button class="btn primary" id="save-map-btn" disabled>Save changes</button>
+          <button class="btn ghost" id="revert-map-btn" disabled>Discard</button>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<div class="applybar" id="applybar" hidden>
+  <div class="applybar-inner">
+    <span id="applybar-text"></span>
+    <button class="btn primary" id="apply-btn">Add songs</button>
+  </div>
+</div>
+
+<dialog id="tag-dialog">
+  <h2 id="tag-dialog-title" style="margin-bottom:4px"></h2>
+  <p class="muted small" style="margin:0">Pick the genre playlist this tag should send songs to.</p>
+  <div class="pick" id="tag-dialog-pick"></div>
+  <div class="dialog-new">
+    <input type="text" id="tag-dialog-new" placeholder="Or a new playlist name">
+    <button class="btn" id="tag-dialog-create">Add</button>
+  </div>
+  <div style="text-align:right;margin-top:16px"><button class="btn ghost" id="tag-dialog-cancel">Cancel</button></div>
+</dialog>
+
+<div class="toast" id="toast" role="status" hidden></div>
+
+<script>
+"use strict";
+
+const $ = (id) => document.getElementById(id);
+const state = { user: null, playlists: [], plan: null, config: null, rows: [], unsorted: "", dirty: false, polling: null };
+
+// ---------------------------------------------------------------- helpers
+
+function h(tag, props, ...kids) {
+  const el = document.createElement(tag);
+  for (const [k, v] of Object.entries(props || {})) {
+    if (k === "class") el.className = v;
+    else if (k.startsWith("on")) el.addEventListener(k.slice(2), v);
+    else if (v === true) el.setAttribute(k, "");
+    else if (v !== false && v != null) el.setAttribute(k, v);
+  }
+  for (const kid of kids.flat()) {
+    if (kid == null || kid === false) continue;
+    el.append(kid instanceof Node ? kid : String(kid));  // strings become text, never HTML
+  }
+  return el;
+}
+
+async function api(method, path, body) {
+  const opts = { method, headers: {} };
+  if (method !== "GET") opts.headers["X-Genrefy"] = "1";
+  if (body !== undefined) {
+    opts.headers["Content-Type"] = "application/json";
+    opts.body = JSON.stringify(body);
+  }
+  const r = await fetch(path, opts);
+  const data = await r.json().catch(() => null);
+  if (!r.ok) {
+    const err = new Error((data && data.error) || `Request failed (${r.status})`);
+    err.status = r.status;
+    throw err;
+  }
+  return data;
+}
+
+function show(el, message) {
+  el.textContent = message || "";
+  el.hidden = !message;
+}
+
+let toastTimer;
+function toast(message) {
+  const t = $("toast");
+  t.textContent = message;
+  t.hidden = false;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => (t.hidden = true), 4000);
+}
+
+const plural = (n, word, many) => `${n.toLocaleString()} ${n === 1 ? word : (many || word + "s")}`;
+const normTag = (s) => s.toLowerCase().replace(/&/g, " and ").replace(/[-_]/g, " ").replace(/\s+/g, " ").trim();
+
+function handleAuthError(err) {
+  if (err.status === 401) { showLogin(); return true; }
+  return false;
+}
+
+// ---------------------------------------------------------------- views
+
+function showLogin(error) {
+  state.user = null;
+  $("loading").hidden = true;
+  $("app-view").hidden = true;
+  $("user-area").hidden = true;
+  $("applybar").hidden = true;
+  $("login-view").hidden = false;
+  show($("login-error"), error);
+}
+
+async function showApp() {
+  $("loading").hidden = true;
+  $("login-view").hidden = true;
+  $("app-view").hidden = false;
+  $("user-area").hidden = false;
+  $("user-name").textContent = state.user.name;
+  await Promise.all([loadPlaylists(), loadGenreMap()]);
+}
+
+function selectTab(which) {
+  const sort = which === "sort";
+  $("tab-sort").setAttribute("aria-selected", sort);
+  $("tab-map").setAttribute("aria-selected", !sort);
+  $("sort-panel").hidden = !sort;
+  $("map-panel").hidden = sort;
+  renderApplyBar();
+}
+
+// ---------------------------------------------------------------- playlists
+
+async function loadPlaylists() {
+  try {
+    state.playlists = await api("GET", "/api/playlists");
+  } catch (err) {
+    if (!handleAuthError(err)) show($("sort-error"), err.message);
+    return;
+  }
+  const select = $("source-select");
+  const previous = select.value;
+  select.replaceChildren(h("option", { value: "" }, "Choose a playlist…"));
+  const groups = [["Your playlists", state.playlists.filter((p) => p.editable)],
+                  ["Playlists you follow", state.playlists.filter((p) => !p.editable)]];
+  for (const [label, list] of groups) {
+    if (!list.length) continue;
+    select.append(h("optgroup", { label },
+      list.map((p) => h("option", { value: p.id }, p.count != null ? `${p.name} (${p.count})` : p.name))));
+  }
+  select.value = previous;
+}
+
+// ---------------------------------------------------------------- preview & apply
+
+async function startPreview() {
+  const source = $("source-link").value.trim() || $("source-select").value;
+  show($("sort-error"));
+  show($("apply-done"));
+  if (!source) { show($("sort-error"), "Choose a playlist or paste a link first."); return; }
+  if (state.dirty && !confirm("You have unsaved genre map changes. Preview with the saved version?")) return;
+  try {
+    const job = await api("POST", "/api/preview", { source });
+    trackJob(job);
+  } catch (err) {
+    if (!handleAuthError(err)) show($("sort-error"), err.message);
+  }
+}
+
+async function startApply() {
+  const plan = state.plan;
+  const { songs, playlists, creates } = planTotals(plan);
+  const extra = creates ? ` and create ${plural(creates, "new playlist")}` : "";
+  if (!confirm(`Add ${plural(songs, "song")} to ${plural(playlists, "playlist")}${extra}?`)) return;
+  show($("sort-error"));
+  try {
+    const job = await api("POST", "/api/apply", { plan_id: plan.id });
+    plan.applied = true;
+    renderApplyBar();
+    trackJob(job);
+  } catch (err) {
+    if (!handleAuthError(err)) show($("sort-error"), err.message);
+  }
+}
+
+function trackJob(job) {
+  renderJob(job);
+  clearInterval(state.polling);
+  if (job.status !== "running") { finishJob(job); return; }
+  state.polling = setInterval(async () => {
+    let current;
+    try { current = await api("GET", "/api/job"); } catch { return; }
+    if (!current || current.id !== job.id) return;
+    renderJob(current);
+    if (current.status !== "running") {
+      clearInterval(state.polling);
+      finishJob(current);
+    }
+  }, 600);
+}
+
+function renderJob(job) {
+  const running = job.status === "running";
+  $("progress").hidden = !running;
+  $("preview-btn").disabled = running;
+  $("apply-btn").disabled = running;
+  if (!running) return;
+  $("progress-stage").textContent = job.stage + "…";
+  $("progress-count").textContent = job.total ? `${job.done.toLocaleString()} / ${job.total.toLocaleString()}` : "";
+  const bar = $("progress-bar");
+  bar.classList.toggle("indeterminate", !job.total);
+  bar.firstElementChild.style.width = job.total ? `${(100 * job.done) / job.total}%` : "";
+}
+
+function finishJob(job) {
+  if (job.status === "error") {
+    if (/log in/i.test(job.error)) { showLogin("Your Spotify login expired. Log in again."); return; }
+    show($("sort-error"), job.error);
+    return;
+  }
+  if (job.kind === "preview") {
+    state.plan = job.result;
+    renderPlan();
+  } else if (job.kind === "apply") {
+    show($("apply-done"), "Done. " + job.log.join(" · "));
+    if (state.plan) state.plan.applied = true;
+    renderPlan();
+    loadPlaylists();
+  }
+}
+
+function planTotals(plan) {
+  const withSongs = plan.targets.filter((t) => t.tracks.length);
+  return {
+    songs: withSongs.reduce((n, t) => n + t.tracks.length, 0),
+    playlists: withSongs.length,
+    creates: withSongs.filter((t) => !t.playlist_id).length,
+  };
+}
+
+function renderPlan() {
+  const plan = state.plan;
+  $("results").hidden = !plan;
+  renderApplyBar();
+  if (!plan) return;
+
+  const { songs, playlists, creates } = planTotals(plan);
+  const source = plan.source_name ? `“${plan.source_name}”` : "your playlist";
+  $("results-title").textContent = plan.applied ? `Applied: ${source}` : `Preview: ${source}`;
+  $("stats").replaceChildren(
+    stat(plan.total, "songs in source"),
+    stat(songs, plan.applied ? "songs added" : "songs to add"),
+    stat(playlists, "playlists getting songs"),
+    stat(creates, "new playlists"),
+    stat(plan.unmatched.length, "unmatched songs"),
+  );
+
+  $("targets").replaceChildren(...plan.targets.map((t) => {
+    const n = t.tracks.length;
+    const shown = t.tracks.slice(0, 300);
+    return h("div", { class: "card target" },
+      h("div", { class: "target-head" },
+        h("div", { class: "target-name" }, t.name),
+        h("div", { class: "count" + (n ? "" : " zero") }, n ? `+${n.toLocaleString()}` : "nothing new")),
+      h("div", { class: "muted small" }, `${plural(t.matched, "song")} match`),
+      !t.playlist_id && n ? h("span", { class: "badge" }, plan.applied ? "created" : "will be created") : null,
+      n ? h("details", {},
+        h("summary", {}, "Show songs"),
+        h("ul", { class: "songs" },
+          shown.map((s) => h("li", {}, s.name, h("span", {}, " — " + s.artists.join(", ")))),
+          n > shown.length ? h("li", { class: "muted" }, `and ${(n - shown.length).toLocaleString()} more`) : null)) : null);
+  }));
+
+  $("unmatched-card").hidden = !plan.unmatched.length;
+  $("unmatched-title").textContent = `${plural(plan.unmatched.length, "song")} matched no genre`;
+  renderUnmatched();
+}
+
+function stat(value, label) {
+  return h("div", { class: "stat" }, h("b", {}, value.toLocaleString()), h("span", {}, label));
+}
+
+function keywordOwners() {
+  const owners = new Map();
+  for (const row of state.rows) for (const k of row.keywords) owners.set(normTag(k), row.name);
+  return owners;
+}
+
+function renderUnmatched() {
+  const owners = keywordOwners();
+  $("unmatched").replaceChildren(...state.plan.unmatched.map((s) =>
+    h("div", { class: "unmatched-row" },
+      h("div", {}, h("div", { class: "title" }, s.name), h("div", { class: "artists" }, s.artists.join(", ") || "Unknown artist")),
+      h("div", { class: "chips" },
+        s.tags.length
+          ? s.tags.map((tag) => {
+              const owner = owners.get(tag);
+              return h("button", {
+                class: "chip" + (owner ? " added" : ""),
+                title: owner ? `Already a keyword for ${owner}` : "Add this tag to a genre playlist",
+                onclick: () => openTagDialog(tag),
+              }, tag, owner ? ` → ${owner}` : "");
+            })
+          : h("span", { class: "muted small" }, "No Last.fm tags")))));
+}
+
+function renderApplyBar() {
+  const plan = state.plan;
+  const onSort = !$("sort-panel").hidden;
+  const { songs, playlists, creates } = plan ? planTotals(plan) : { songs: 0 };
+  const visible = !!(plan && !plan.applied && songs && onSort && state.user);
+  $("applybar").hidden = !visible;
+  if (!visible) return;
+  const extra = creates ? ` (${plural(creates, "new playlist")})` : "";
+  $("applybar-text").textContent = `Ready to add ${plural(songs, "song")} to ${plural(playlists, "playlist")}${extra}.`;
+  $("apply-btn").textContent = `Add ${plural(songs, "song")}`;
+}
+
+// ---------------------------------------------------------------- tag dialog
+
+let dialogTag = null;
+
+function openTagDialog(tag) {
+  dialogTag = tag;
+  $("tag-dialog-title").textContent = `Add tag “${tag}”`;
+  $("tag-dialog-new").value = "";
+  $("tag-dialog-pick").replaceChildren(...state.rows.map((row) =>
+    h("button", { class: "btn sm", onclick: () => addTagTo(row.name) }, row.name)));
+  $("tag-dialog").showModal();
+}
+
+async function addTagTo(name) {
+  name = name.trim();
+  if (!name) return;
+  const tag = dialogTag;
+  $("tag-dialog").close();
+  if (state.dirty) {
+    toast("Save or discard your genre map edits first.");
+    selectTab("map");
+    return;
+  }
+  let row = state.rows.find((r) => r.name.toLowerCase() === name.toLowerCase());
+  if (!row) { row = { name, keywords: [] }; state.rows.push(row); }
+  if (!row.keywords.some((k) => normTag(k) === tag)) row.keywords.push(tag);
+  try {
+    await saveGenreMap();
+    toast(`Added “${tag}” to ${row.name}. Preview again to sort those songs.`);
+  } catch (err) {
+    toast(err.message);
+    await loadGenreMap();
+  }
+  if (state.plan) renderUnmatched();
+}
+
+// ---------------------------------------------------------------- genre map editor
+
+async function loadGenreMap() {
+  try {
+    state.config = await api("GET", "/api/genre-map");
+  } catch (err) {
+    if (!handleAuthError(err)) show($("map-error"), err.message);
+    return;
+  }
+  const playlists = state.config.playlists || {};
+  state.rows = Object.entries(playlists).map(([name, kws]) => ({ name, keywords: [].concat(kws || []) }));
+  state.unsorted = state.config.unsorted_playlist || "";
+  setDirty(false);
+  renderMap();
+}
+
+function setDirty(dirty) {
+  state.dirty = dirty;
+  $("save-map-btn").disabled = !dirty;
+  $("revert-map-btn").disabled = !dirty;
+}
+
+function renderMap() {
+  show($("map-error"));
+  $("unsorted-input").value = state.unsorted;
+  $("map-rows").replaceChildren(...state.rows.map((row, i) => {
+    const add = h("input", {
+      type: "text", placeholder: "+ keyword", "aria-label": `Add keyword to ${row.name}`,
+      onkeydown: (e) => {
+        if (e.key !== "Enter" && e.key !== ",") return;
+        e.preventDefault();
+        const value = add.value.trim().toLowerCase();
+        if (value && !row.keywords.some((k) => normTag(k) === normTag(value))) {
+          row.keywords.push(value);
+          setDirty(true);
+          renderMap();
+          document.querySelectorAll(".map-row")[i].querySelector(".chips input").focus();
+        } else {
+          add.value = "";
+        }
+      },
+    });
+    return h("div", { class: "map-row" },
+      h("input", {
+        type: "text", value: row.name, "aria-label": "Playlist name",
+        oninput: (e) => { row.name = e.target.value; setDirty(true); },
+      }),
+      h("div", { class: "chips" },
+        row.keywords.map((k, j) => h("span", { class: "chip static" }, k,
+          h("button", {
+            class: "x", title: `Remove ${k}`, "aria-label": `Remove ${k}`,
+            onclick: () => { row.keywords.splice(j, 1); setDirty(true); renderMap(); },
+          }, "×"))),
+        add),
+      h("button", {
+        class: "btn sm ghost danger", title: `Remove ${row.name}`,
+        onclick: () => { state.rows.splice(i, 1); setDirty(true); renderMap(); },
+      }, "Remove"));
+  }));
+}
+
+function buildConfig() {
+  const names = new Set();
+  const playlists = {};
+  for (const row of state.rows) {
+    const name = row.name.trim();
+    if (!name) throw new Error("Every genre playlist needs a name.");
+    if (names.has(name.toLowerCase())) throw new Error(`“${name}” is listed twice.`);
+    if (!row.keywords.length) throw new Error(`“${name}” needs at least one keyword.`);
+    names.add(name.toLowerCase());
+    playlists[name] = row.keywords;
+  }
+  // keep any extra keys (like _help) from the original file
+  return { ...state.config, playlists, unsorted_playlist: state.unsorted.trim() || null };
+}
+
+async function saveGenreMap() {
+  const config = buildConfig();
+  await api("PUT", "/api/genre-map", config);
+  state.config = config;
+  setDirty(false);
+}
+
+// ---------------------------------------------------------------- wiring
+
+$("tab-sort").onclick = () => selectTab("sort");
+$("tab-map").onclick = () => selectTab("map");
+$("preview-btn").onclick = startPreview;
+$("apply-btn").onclick = startApply;
+$("source-select").onchange = () => { if ($("source-select").value) $("source-link").value = ""; };
+$("logout-btn").onclick = async () => {
+  await api("POST", "/api/logout").catch(() => {});
+  state.plan = null;
+  showLogin();
+};
+
+$("add-playlist-btn").onclick = () => {
+  state.rows.push({ name: "", keywords: [] });
+  setDirty(true);
+  renderMap();
+  const inputs = document.querySelectorAll(".map-row > input");
+  inputs[inputs.length - 1].focus();
+};
+$("unsorted-input").oninput = (e) => { state.unsorted = e.target.value; setDirty(true); };
+$("save-map-btn").onclick = async () => {
+  show($("map-error"));
+  try {
+    await saveGenreMap();
+    toast("Genre map saved.");
+    if (state.plan) renderUnmatched();
+  } catch (err) {
+    if (!handleAuthError(err)) show($("map-error"), err.message);
+  }
+};
+$("revert-map-btn").onclick = loadGenreMap;
+
+$("tag-dialog-cancel").onclick = () => $("tag-dialog").close();
+$("tag-dialog-create").onclick = () => addTagTo($("tag-dialog-new").value);
+$("tag-dialog-new").onkeydown = (e) => {
+  if (e.key !== "Enter") return;
+  e.preventDefault();  // otherwise the Enter lands on the chip that regains focus and reopens the dialog
+  addTagTo($("tag-dialog-new").value);
+};
+
+window.addEventListener("beforeunload", (e) => { if (state.dirty) e.preventDefault(); });
+
+(async function init() {
+  const params = new URLSearchParams(location.search);
+  const loginError = params.get("login_error");
+  if (loginError) history.replaceState(null, "", "/");
+  let status;
+  try {
+    status = await api("GET", "/api/status");
+  } catch (err) {
+    $("loading").textContent = "Couldn't reach Genrefy: " + err.message;
+    return;
+  }
+  if (!status.user) { showLogin(loginError && `Spotify login failed: ${loginError}`); return; }
+  state.user = status.user;
+  await showApp();
+  if (status.plan) { state.plan = status.plan; renderPlan(); }
+  if (status.job && status.job.status === "running") trackJob(status.job);
+})();
+</script>
+</body>
+</html>

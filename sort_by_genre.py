@@ -11,6 +11,8 @@ Usage:
     python sort_by_genre.py "My Big Playlist" --dry-run   # preview, changes nothing
     python sort_by_genre.py "My Big Playlist"             # actually add songs
     python sort_by_genre.py https://open.spotify.com/playlist/XXXX
+
+For a browser UI instead, run: python genrefy_web.py
 """
 
 import argparse
@@ -22,6 +24,7 @@ import os
 import re
 import secrets
 import sys
+import threading
 import time
 import urllib.parse
 import webbrowser
@@ -54,6 +57,14 @@ MAX_RETRY_WAIT = 300  # give up rather than sleep longer than this on a 429
 LOGIN_TIMEOUT = 300
 
 
+class GenrefyError(Exception):
+    """A problem to show the user as a plain message, without a traceback."""
+
+
+class NotLoggedIn(GenrefyError):
+    pass
+
+
 # ---------------------------------------------------------------- helpers
 
 def load_env():
@@ -71,8 +82,12 @@ def load_env():
 def require_env(name):
     value = os.environ.get(name, "")
     if not value or value.startswith("paste_"):
-        sys.exit(f"Missing {name}. Copy .env.example to .env and fill it in.")
+        raise GenrefyError(f"Missing {name}. Copy .env.example to .env and fill it in.")
     return value
+
+
+def redirect_uri():
+    return os.environ.get("SPOTIFY_REDIRECT_URI") or DEFAULT_REDIRECT
 
 
 def norm(tag):
@@ -119,9 +134,14 @@ class _CallbackHandler(http.server.BaseHTTPRequestHandler):
 
 
 class SpotifyAuth:
-    def __init__(self):
+    """Holds the Spotify token. With interactive=False it never opens a browser itself;
+    callers (the web UI) handle login through authorize_url() and exchange_code()."""
+
+    def __init__(self, interactive=True):
         self.client_id = require_env("SPOTIFY_CLIENT_ID")
-        self.redirect_uri = os.environ.get("SPOTIFY_REDIRECT_URI") or DEFAULT_REDIRECT
+        self.redirect_uri = redirect_uri()
+        self.interactive = interactive
+        self._lock = threading.Lock()
         self.token = None
         if TOKEN_FILE.exists():
             try:
@@ -142,7 +162,8 @@ class SpotifyAuth:
         except OSError:
             pass
 
-    def _login(self):
+    def authorize_url(self):
+        """Return (url, state, verifier) for a new PKCE login."""
         verifier = secrets.token_urlsafe(64)
         challenge = base64.urlsafe_b64encode(
             hashlib.sha256(verifier.encode()).digest()
@@ -157,15 +178,31 @@ class SpotifyAuth:
             "scope": SCOPES,
             "state": state,
         })
+        return url, state, verifier
 
+    def exchange_code(self, code, verifier):
+        r = requests.post(SPOTIFY_TOKEN, data={
+            "grant_type": "authorization_code",
+            "code": code,
+            "redirect_uri": self.redirect_uri,
+            "client_id": self.client_id,
+            "code_verifier": verifier,
+        }, timeout=30)
+        if not r.ok:
+            raise GenrefyError(f"Spotify login failed: {r.status_code} {r.text[:300]}")
+        with self._lock:
+            self._save(r.json())
+
+    def _login(self):
+        url, state, verifier = self.authorize_url()
         parsed = urllib.parse.urlparse(self.redirect_uri)
         _CallbackHandler.path_expected = parsed.path or "/"
         _CallbackHandler.result = {}
         try:
             server = http.server.HTTPServer((parsed.hostname, parsed.port or 80), _CallbackHandler)
         except OSError as e:
-            sys.exit(f"Couldn't listen on {parsed.hostname}:{parsed.port} for the Spotify login ({e}). "
-                     "Is something else using that port?")
+            raise GenrefyError(f"Couldn't listen on {parsed.hostname}:{parsed.port} for the Spotify login "
+                               f"({e}). Is something else (like genrefy_web.py) using that port?")
         server.timeout = 1
 
         print("Opening your browser to log in to Spotify...")
@@ -180,22 +217,12 @@ class SpotifyAuth:
 
         result = _CallbackHandler.result
         if not result:
-            sys.exit("Spotify login failed: no response within 5 minutes.")
+            raise GenrefyError("Spotify login failed: no response within 5 minutes.")
         if "error" in result:
-            sys.exit(f"Spotify login failed: {result['error']}")
+            raise GenrefyError(f"Spotify login failed: {result['error']}")
         if result.get("state") != state or "code" not in result:
-            sys.exit("Spotify login failed: the response didn't match this login attempt. Try again.")
-
-        r = requests.post(SPOTIFY_TOKEN, data={
-            "grant_type": "authorization_code",
-            "code": result["code"],
-            "redirect_uri": self.redirect_uri,
-            "client_id": self.client_id,
-            "code_verifier": verifier,
-        }, timeout=30)
-        if not r.ok:
-            sys.exit(f"Spotify login failed: {r.status_code} {r.text[:300]}")
-        self._save(r.json())
+            raise GenrefyError("Spotify login failed: the response didn't match this login attempt. Try again.")
+        self.exchange_code(result["code"], verifier)
 
     def _refresh(self):
         try:
@@ -211,23 +238,35 @@ class SpotifyAuth:
         self._save(r.json())
         return True
 
+    def logged_in(self):
+        return self.token is not None
+
+    def logout(self):
+        with self._lock:
+            self.token = None
+            TOKEN_FILE.unlink(missing_ok=True)
+
     def invalidate(self):
         """Force a refresh on the next access_token() call (e.g. after a 401)."""
         if self.token:
             self.token["expires_at"] = 0
 
     def access_token(self):
-        if self.token and time.time() < self.token.get("expires_at", 0):
+        with self._lock:
+            if self.token and time.time() < self.token.get("expires_at", 0):
+                return self.token["access_token"]
+            if self.token and self.token.get("refresh_token") and self._refresh():
+                return self.token["access_token"]
+            if not self.interactive:
+                self.token = None
+                raise NotLoggedIn("Log in to Spotify first.")
+            self._login()
             return self.token["access_token"]
-        if self.token and self.token.get("refresh_token") and self._refresh():
-            return self.token["access_token"]
-        self._login()
-        return self.token["access_token"]
 
 
 # ---------------------------------------------------------------- Spotify API
 
-class SpotifyError(Exception):
+class SpotifyError(GenrefyError):
     def __init__(self, status, method, url, text):
         super().__init__(f"Spotify error {status} on {method} {url}:\n{text[:400]}")
         self.status = status
@@ -259,7 +298,7 @@ class Spotify:
             if r.status_code == 429:  # rate limited: wait as told
                 wait = retry_after_seconds(r.headers)
                 if wait > MAX_RETRY_WAIT:
-                    sys.exit(f"Spotify rate-limited this app for {int(wait)} seconds. Try again later.")
+                    raise GenrefyError(f"Spotify rate-limited this app for {int(wait)} seconds. Try again later.")
                 time.sleep(wait + 1)
                 continue
             if r.status_code >= 500:
@@ -268,7 +307,7 @@ class Spotify:
             if not r.ok:
                 raise SpotifyError(r.status_code, method, url, r.text)
             return r.json() if r.content else {}
-        sys.exit(f"Spotify kept failing on {method} {url}; try again later.")
+        raise GenrefyError(f"Spotify kept failing on {method} {url}; try again later.")
 
     def paged(self, url, params=None):
         data = self.call("GET", url, params=params)
@@ -343,7 +382,7 @@ class LastFM:
             # Last.fm reports errors in the JSON body, sometimes with a 200, sometimes not
             error = data.get("error")
             if error in (10, 26) or (r.status_code == 403 and error is None):
-                sys.exit("Last.fm rejected the API key. Check LASTFM_API_KEY in .env.")
+                raise GenrefyError("Last.fm rejected the API key. Check LASTFM_API_KEY in .env.")
             if error == 29 or r.status_code == 429:  # rate limit exceeded
                 time.sleep(5 * (attempt + 1))
                 continue
@@ -385,28 +424,40 @@ def parse_toptags(data, min_weight=MIN_TAG_WEIGHT, max_tags=MAX_TAGS):
     return found
 
 
-# ---------------------------------------------------------------- main logic
+# ---------------------------------------------------------------- genre map
 
-def load_genre_map(path=MAP_FILE):
-    if not path.exists():
-        sys.exit(f"Missing {path.name}. It should sit next to this script.")
-    try:
-        config = json.loads(path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as e:
-        sys.exit(f"{path.name} isn't valid JSON: {e}")
+def parse_genre_map(config, source="genre map"):
+    """Validate a genre map config dict. Returns ({playlist: {keywords}}, unsorted name or None)."""
+    if not isinstance(config, dict):
+        raise GenrefyError(f"{source} must be a JSON object.")
     playlists = {}
     for name, keywords in (config.get("playlists") or {}).items():
         if isinstance(keywords, str):  # "Pop": "pop" instead of ["pop"]
             keywords = [keywords]
         kws = {norm(k) for k in keywords or []} - {""}
         if not name.strip() or not kws:
-            sys.exit(f'{path.name}: playlist "{name}" needs a name and at least one keyword.')
+            raise GenrefyError(f'{source}: playlist "{name}" needs a name and at least one keyword.')
         playlists[name.strip()] = kws
     if not playlists:
-        sys.exit(f"{path.name} has no playlists defined.")
+        raise GenrefyError(f"{source} has no playlists defined.")
     unsorted = (config.get("unsorted_playlist") or "").strip() or None
     return playlists, unsorted
 
+
+def read_genre_config(path=MAP_FILE):
+    if not path.exists():
+        raise GenrefyError(f"Missing {path.name}. It should sit next to this script.")
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as e:
+        raise GenrefyError(f"{path.name} isn't valid JSON: {e}")
+
+
+def load_genre_map(path=MAP_FILE):
+    return parse_genre_map(read_genre_config(path), path.name)
+
+
+# ---------------------------------------------------------------- pure helpers
 
 def parse_playlist_id(text):
     """Extract a playlist ID from a link, a spotify: URI, or a bare 22-character ID."""
@@ -460,39 +511,41 @@ def new_uris(tracks, existing):
     return out
 
 
-def main():
-    parser = argparse.ArgumentParser(
-        prog="sort_by_genre.py",
-        description=f"{APP_NAME}: sort a Spotify playlist into genre playlists using Last.fm tags.",
-    )
-    parser.add_argument("source", help="Source playlist name, link, or ID")
-    parser.add_argument("--dry-run", action="store_true", help="Preview without changing anything")
-    parser.add_argument("--map", type=Path, default=MAP_FILE, help="Path to the genre map JSON")
-    args = parser.parse_args()
-
-    load_env()
-    genre_map, unsorted_name = load_genre_map(args.map)
-    sp = Spotify(SpotifyAuth())
-    lastfm = LastFM()
-
-    try:
-        run(sp, lastfm, args, genre_map, unsorted_name)
-    except SpotifyError as e:
-        sys.exit(str(e))
+def track_summary(track):
+    return {
+        "uri": track["uri"],
+        "name": track.get("name") or "(untitled)",
+        "artists": [a["name"] for a in track.get("artists") or [] if a and a.get("name")],
+    }
 
 
-def run(sp, lastfm, args, genre_map, unsorted_name):
+# ---------------------------------------------------------------- plan and apply
+
+def resolve_source(source, by_name):
+    """Return (playlist id, name or None). An exact name in your library wins over ID parsing."""
+    source = source.strip()
+    match = by_name.get(source.lower()) or next((p for p in by_name.values() if p.get("id") == source), None)
+    if match:
+        return match["id"], match.get("name")
+    source_id = parse_playlist_id(source)
+    if source_id is None:
+        raise GenrefyError(f'No playlist named "{source}" in your library.')
+    name = next((p.get("name") for p in by_name.values() if p.get("id") == source_id), None)
+    return source_id, name
+
+
+def build_plan(sp, lastfm, source, genre_map, unsorted_name, progress=None):
+    """Work out which songs would go where, without changing anything.
+
+    progress(stage, done, total) is called as work proceeds, if given.
+    The returned dict is JSON-serializable.
+    """
+    progress = progress or (lambda stage, done, total: None)
+    progress("Reading your playlists", 0, 0)
     me = sp.me()
     my_id = me["id"]
-    print(f"Signed in as {me.get('display_name') or my_id}")
-
     by_name = index_by_name(sp.my_playlists(), my_id)
-
-    # --- find the source playlist (an exact name in your library wins over ID parsing)
-    match = by_name.get(args.source.strip().lower())
-    source_id = match["id"] if match else parse_playlist_id(args.source)
-    if source_id is None:
-        sys.exit(f'No playlist named "{args.source}" in your library.')
+    source_id, source_name = resolve_source(source, by_name)
 
     # --- find (or plan to create) each target playlist
     target_names = list(dict.fromkeys(list(genre_map) + ([unsorted_name] if unsorted_name else [])))
@@ -500,65 +553,140 @@ def run(sp, lastfm, args, genre_map, unsorted_name):
     for name in target_names:
         p = by_name.get(name.lower())
         if p and not can_edit(p, my_id):
-            sys.exit(f'"{name}" isn\'t your playlist, so songs can\'t be added to it. '
-                     "Rename it in the genre map.")
+            raise GenrefyError(f'"{name}" isn\'t your playlist, so songs can\'t be added to it. '
+                               "Rename it in the genre map.")
         targets[name] = p  # None means it needs creating
 
     # --- read source and work out where each track goes
+    progress("Reading the source playlist", 0, 0)
     try:
-        tracks = list(sp.playlist_tracks(source_id))
+        tracks = [track_summary(t) for t in sp.playlist_tracks(source_id)]
     except SpotifyError as e:
         if e.status in (403, 404):
-            sys.exit("Couldn't read the source playlist. It may not exist, or Spotify may not let "
-                     "this app read it (playlists you don't own or collaborate on are often blocked). "
-                     "Copy its songs into a playlist of your own and use that instead.")
+            raise GenrefyError(
+                "Couldn't read the source playlist. It may not exist, or Spotify may not let "
+                "this app read it (playlists you don't own or collaborate on are often blocked). "
+                "Copy its songs into a playlist of your own and use that instead.")
         raise
-    print(f"Source playlist has {len(tracks)} songs. Looking up genres on Last.fm...")
 
-    plan = {name: [] for name in target_names}
+    assigned = {name: [] for name in target_names}
     unmatched = []
     try:
         for i, track in enumerate(tracks, 1):
-            artists = [a["name"] for a in track.get("artists") or [] if a and a.get("name")]
-            hits, seen_tags = match_genres(artists, genre_map, lastfm.tags)
+            hits, seen_tags = match_genres(track["artists"], genre_map, lastfm.tags)
             for name in hits:
-                plan[name].append(track)
+                assigned[name].append(track)
             if not hits:
-                unmatched.append((track, artists, seen_tags))
+                unmatched.append({**track, "tags": seen_tags})
                 if unsorted_name:
-                    plan[unsorted_name].append(track)
+                    assigned[unsorted_name].append(track)
+            progress("Looking up genres on Last.fm", i, len(tracks))
             if i % 25 == 0:
-                print(f"  {i}/{len(tracks)}")
                 lastfm.save()
     finally:
         lastfm.save()  # keep lookups even if interrupted
 
-    # --- add songs, skipping ones already in each target
-    print("\nResults:")
-    for name in target_names:
+    # --- skip songs already in each target
+    results = []
+    for n, name in enumerate(target_names, 1):
+        progress("Checking your genre playlists", n, len(target_names))
         playlist = targets[name]
         existing = {t["uri"] for t in sp.playlist_tracks(playlist["id"])} if playlist else set()
-        uris = new_uris(plan[name], existing)
+        by_uri = {t["uri"]: t for t in assigned[name]}
+        results.append({
+            "name": name,
+            "playlist_id": playlist["id"] if playlist else None,
+            "matched": len(by_uri),
+            "tracks": [by_uri[u] for u in new_uris(assigned[name], existing)],
+        })
 
+    return {
+        "user": me.get("display_name") or my_id,
+        "source_id": source_id,
+        "source_name": source_name,
+        "total": len(tracks),
+        "targets": results,
+        "unmatched": unmatched,
+    }
+
+
+def apply_plan(sp, plan, report=print):
+    """Create missing playlists and add the planned songs. Re-checks each target first,
+    so songs added since the plan was built aren't added twice."""
+    for target in plan["targets"]:
+        name, playlist_id = target["name"], target["playlist_id"]
+        existing = {t["uri"] for t in sp.playlist_tracks(playlist_id)} if playlist_id else set()
+        uris = new_uris(target["tracks"], existing)
         if not uris:
-            print(f"  {name}: nothing new")
+            report(f"{name}: nothing new")
             continue
-        if args.dry_run:
-            note = " (playlist would be created)" if not playlist else ""
-            print(f"  {name}: would add {len(uris)} songs{note}")
-            continue
-        if not playlist:
-            playlist = sp.create_playlist(name)
-            print(f'  Created playlist "{name}"')
-        sp.add_tracks(playlist["id"], uris)
-        print(f"  {name}: added {len(uris)} songs")
+        if not playlist_id:
+            playlist_id = target["playlist_id"] = sp.create_playlist(name)["id"]
+            report(f'Created playlist "{name}"')
+        sp.add_tracks(playlist_id, uris)
+        report(f"{name}: added {len(uris)} songs")
+
+
+def write_unmatched(unmatched, path=UNMATCHED_FILE):
+    with path.open("w", encoding="utf-8") as f:
+        for t in unmatched:
+            f.write(f"{t['name']} - {', '.join(t['artists'])}  |  tags: {', '.join(t['tags']) or '(none)'}\n")
+
+
+# ---------------------------------------------------------------- CLI
+
+def main():
+    parser = argparse.ArgumentParser(
+        prog="sort_by_genre.py",
+        description=f"{APP_NAME}: sort a Spotify playlist into genre playlists using Last.fm tags.",
+        epilog="For a browser UI, run: python genrefy_web.py",
+    )
+    parser.add_argument("source", help="Source playlist name, link, or ID")
+    parser.add_argument("--dry-run", action="store_true", help="Preview without changing anything")
+    parser.add_argument("--map", type=Path, default=MAP_FILE, help="Path to the genre map JSON")
+    args = parser.parse_args()
+
+    load_env()
+    try:
+        genre_map, unsorted_name = load_genre_map(args.map)
+        sp = Spotify(SpotifyAuth())
+        lastfm = LastFM()
+        run(sp, lastfm, args, genre_map, unsorted_name)
+    except GenrefyError as e:
+        sys.exit(str(e))
+
+
+def run(sp, lastfm, args, genre_map, unsorted_name):
+    last_stage = None
+
+    def progress(stage, done, total):
+        nonlocal last_stage
+        if stage != last_stage:
+            print(f"{stage}...")
+            last_stage = stage
+        if stage.startswith("Looking up") and done % 25 == 0:
+            print(f"  {done}/{total}")
+
+    me = sp.me()
+    print(f"Signed in as {me.get('display_name') or me['id']}")
+    plan = build_plan(sp, lastfm, args.source, genre_map, unsorted_name, progress)
+    print(f"Source playlist has {plan['total']} songs.")
+
+    print("\nResults:")
+    if args.dry_run:
+        for target in plan["targets"]:
+            count = len(target["tracks"])
+            if not count:
+                print(f"  {target['name']}: nothing new")
+                continue
+            note = " (playlist would be created)" if not target["playlist_id"] else ""
+            print(f"  {target['name']}: would add {count} songs{note}")
+    else:
+        apply_plan(sp, plan, report=lambda msg: print(f"  {msg}"))
 
     # --- report songs no rule matched, with their tags so you can add keywords
-    with UNMATCHED_FILE.open("w", encoding="utf-8") as f:
-        for track, artists, tags in unmatched:
-            title = track.get("name") or "(untitled)"
-            f.write(f"{title} - {', '.join(artists)}  |  tags: {', '.join(tags) or '(none)'}\n")
-    print(f"\n{len(unmatched)} songs matched no genre playlist; see {UNMATCHED_FILE.name}")
+    write_unmatched(plan["unmatched"])
+    print(f"\n{len(plan['unmatched'])} songs matched no genre playlist; see {UNMATCHED_FILE.name}")
     if args.dry_run:
         print("Dry run: nothing was changed. Run again without --dry-run to apply.")
 

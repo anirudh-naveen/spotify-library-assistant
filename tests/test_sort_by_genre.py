@@ -157,7 +157,7 @@ def test_load_genre_map_normalizes(tmp_path):
 def test_load_genre_map_rejects_empty_keywords(tmp_path):
     path = tmp_path / "map.json"
     path.write_text(json.dumps({"playlists": {"Pop": []}}))
-    with pytest.raises(SystemExit):
+    with pytest.raises(sbg.GenrefyError):
         sbg.load_genre_map(path)
 
 
