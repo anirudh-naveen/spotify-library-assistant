@@ -1,17 +1,21 @@
 # Spotassist
 
-Spotassist sorts a big Spotify playlist into smaller genre playlists.
+Spotassist sorts a big Spotify playlist into smaller genre playlists, and cleans
+out songs that don't fit a playlist.
 
 You point it at a source playlist. For each song it looks up the artist's top
-tags on [Last.fm](https://www.last.fm/api/show/artist.getTopTags), then appends
-the song to every genre playlist whose keywords match. The keywords and
-playlists come from `genre_map.json`, which you edit. A song can land in more
-than one playlist.
+tags on [Last.fm](https://www.last.fm/api/show/artist.getTopTags), then adds the
+song to every genre playlist whose keywords match. You decide the genres, their
+keywords, and which playlist each one goes to. A song can land in more than one
+playlist.
 
-Spotassist only adds songs: anything already in a target playlist is skipped, so
-re-running it after you add songs to the source picks up just the new ones. Songs
-that matched nothing are listed in `unmatched.txt` along with their Last.fm tags,
-so you can see which keywords to add.
+Spotassist only adds songs when sorting: anything already in a target playlist is
+skipped (including the same song from a different release), so re-running it
+after you add songs to the source picks up just the new ones.
+
+**Use it in your browser:** https://anirudh-naveen.github.io/spotify-library-assistant/
+
+There's also a [command-line version](#command-line-version) in this repo.
 
 ## Why Last.fm?
 
@@ -19,88 +23,48 @@ Spotify's Web API no longer reliably returns artist genres. The field is
 deprecated and often empty. Last.fm's community tags cover far more artists and
 are free to query with an API key.
 
-## Requirements
+## Using the website
 
-- Python 3.9+
-- A Spotify account
-- A Spotify developer app (free; you only need its Client ID)
-- A Last.fm API key (free)
+The website runs entirely in your browser. There's no Spotassist server: the page
+talks straight to Spotify and Last.fm, and everything it saves (your keys, your
+Spotify login, your genre map and a cache of Last.fm tags) stays in that
+browser's storage.
 
-The only dependency is `requests`.
+### First visit: connect your accounts
 
-## Setup
+You need two free keys. The page walks you through this, but in short:
 
-### 1. Install
+1. **Spotify Client ID.** In the [Spotify Developer Dashboard](https://developer.spotify.com/dashboard),
+   click **Create app**. Under **Redirect URIs**, add the page's address exactly as
+   the setup panel shows it (for the site above, that's
+   `https://anirudh-naveen.github.io/spotify-library-assistant/`). Tick **Web API**,
+   save, and copy the **Client ID** from the app's Settings.
+2. **Last.fm API key.** Create one at [last.fm/api/account/create](https://www.last.fm/api/account/create).
+   Any app name works, and the callback URL can stay blank. Copy the **API key**.
 
-```bash
-python3 -m venv .venv
-source .venv/bin/activate        # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
-```
+Paste both into the setup panel, click **Save keys**, then **Log in with Spotify**.
 
-### 2. Create a Spotify developer app
+Why your own Spotify app? Spotify keeps apps in Development mode unless a company
+applies for more, and Development mode only allows a short list of accounts that
+the app's owner adds by hand. With your own app you're the owner, so it always
+works for you. To share yours with friends, add their Spotify emails under
+**User Management** in the dashboard.
 
-1. Go to the [Spotify Developer Dashboard](https://developer.spotify.com/dashboard) and log in.
-2. Click **Create app**. Any name and description will do.
-3. Under **Redirect URIs**, add exactly `http://127.0.0.1:8888/callback`.
-   Spotify doesn't accept `localhost`; use the loopback IP.
-4. Under **Which API/SDKs are you planning to use?**, tick **Web API**, then save.
-5. Open the app's **Settings** and copy the **Client ID**. You don't need the
-   client secret: Spotassist logs in with PKCE.
-6. New apps start in Development mode, where only allowlisted accounts can log
-   in. If someone other than the app owner will use it, add their Spotify email
-   under **User Management**.
+### The three tabs
 
-### 3. Get a Last.fm API key
-
-1. Go to [Create API account](https://www.last.fm/api/account/create). Log in or
-   sign up first if asked.
-2. Fill in an application name. The callback URL and homepage can stay blank.
-3. Copy the **API key**. You don't need the shared secret.
-
-### 4. Configure
-
-```bash
-cp .env.example .env
-```
-
-Open `.env` and fill in:
-
-| Variable | Required | Notes |
-| --- | --- | --- |
-| `SPOTIFY_CLIENT_ID` | yes | From step 2 |
-| `LASTFM_API_KEY` | yes | From step 3 |
-| `SPOTIFY_REDIRECT_URI` | no | Defaults to `http://127.0.0.1:8888/callback`. If you change it, make it match the dashboard exactly. |
-
-Values already set in your environment take precedence over `.env`.
-
-## Usage
-
-### Web UI
-
-```bash
-python spotassist_web.py
-```
-
-This starts a small web server on your own computer and opens
-http://127.0.0.1:8888 in your browser. From there you can:
-
-- log in to Spotify
-- pick a source playlist from your library, or paste a link
-- optionally filter the source by date: when songs were added to it, or when
-  they were released
-- preview which songs would go to which playlist, with live progress
-- click **Add songs** to apply the preview
-- see the songs that matched nothing along with their Last.fm tags. Click a tag
-  to add it as a keyword for a genre.
-- edit your genres in the **Genre map** tab, and pick the playlist each genre goes
-  to: one you already own, or a new one with any name
-- remove songs that don't fit from one of your playlists in the **Clean up** tab
-  (see below)
+- **Sort** adds songs to genre playlists. Pick a source playlist (or paste a
+  link), optionally filter by the date songs were added or released, and click
+  **Preview** to see exactly what would go where. Nothing changes until you click
+  **Add songs**. Songs that matched nothing are listed with their Last.fm tags;
+  click a tag to add it as a keyword for a genre.
+- **Clean** removes songs that don't fit one of your playlists (see below).
+- **Map** is where you edit genres: each one's keywords and the playlist it goes
+  to, which can be one you already own or a new one with any name. Several genres
+  can share a playlist. Use **Export** to back up your genre map or move it to
+  another browser, and **Import** to load one, including a `genre_map.json` from
+  the command-line version.
 
 #### Cleaning up a playlist
-
-The **Clean up** tab removes songs that don't fit a playlist:
 
 1. Pick one of your playlists and the genre(s) it should match. If several genres
    go to that playlist, "Any genre that goes here" is picked for you, so songs
@@ -117,13 +81,100 @@ The **Clean up** tab removes songs that don't fit a playlist:
 The check is per artist, the same as sorting. Fixing your keywords first (for
 example removing broad tags like `dance`) makes the list more accurate.
 
-The server only answers requests from that page on your own computer. It uses
-the same address as the Spotify redirect URI, so stop it (Ctrl+C) before using
-the command line version's login. Use `--no-browser` to skip opening a tab, and
-`--map` to use a different genre map. Saving from the Genre map tab rewrites
-`genre_map.json` with standard JSON formatting.
+### Privacy
 
-### Command line
+The page sends your playlists' data only to Spotify, and artist names only to
+Last.fm. The fonts come from Google Fonts. Logging out removes your Spotify login
+from the browser; your keys and genre map stay until you clear the site's data.
+
+## Publishing your own copy
+
+The website is the `docs/` folder: plain HTML, CSS and JavaScript with no build
+step, so GitHub Pages can serve it as is.
+
+1. Push the repo to GitHub.
+2. In the repo, open **Settings → Pages**. Under **Build and deployment**, choose
+   **Deploy from a branch**, pick your main branch and the `/docs` folder, and save.
+3. After a minute the site is live at `https://<your-username>.github.io/<repo-name>/`.
+   Add that exact address to your Spotify app's **Redirect URIs**.
+
+Optionally, put your own Spotify Client ID and Last.fm API key in `docs/config.js`
+so visitors can skip the setup step. Both end up public on your site, which is
+fine for these two keys, but your Spotify app still only works for the accounts
+you add under **User Management**, and everyone shares your Last.fm rate limit.
+
+### Running the website locally
+
+```bash
+python3 -m http.server 8888 --bind 127.0.0.1 --directory docs
+```
+
+Then open http://127.0.0.1:8888/ and add `http://127.0.0.1:8888/` to your Spotify
+app's Redirect URIs. Opening `docs/index.html` straight from disk won't work,
+because browsers don't allow its JavaScript modules or the Spotify login from
+`file://` pages.
+
+## Command-line version
+
+`sort_by_genre.py` does the sorting from a terminal, using `genre_map.json` in
+this folder for its genres.
+
+### Requirements
+
+- Python 3.9+
+- A Spotify account
+- A Spotify developer app (free; you only need its Client ID)
+- A Last.fm API key (free)
+
+The only dependency is `requests`.
+
+### Setup
+
+#### 1. Install
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate        # Windows: .venv\Scripts\activate
+pip install -r requirements.txt
+```
+
+#### 2. Create a Spotify developer app
+
+1. Go to the [Spotify Developer Dashboard](https://developer.spotify.com/dashboard) and log in.
+2. Click **Create app**. Any name and description will do.
+3. Under **Redirect URIs**, add exactly `http://127.0.0.1:8888/callback`.
+   Spotify doesn't accept `localhost`; use the loopback IP.
+4. Under **Which API/SDKs are you planning to use?**, tick **Web API**, then save.
+5. Open the app's **Settings** and copy the **Client ID**. You don't need the
+   client secret: Spotassist logs in with PKCE.
+6. New apps start in Development mode, where only allowlisted accounts can log
+   in. If someone other than the app owner will use it, add their Spotify email
+   under **User Management**.
+
+#### 3. Get a Last.fm API key
+
+1. Go to [Create API account](https://www.last.fm/api/account/create). Log in or
+   sign up first if asked.
+2. Fill in an application name. The callback URL and homepage can stay blank.
+3. Copy the **API key**. You don't need the shared secret.
+
+#### 4. Configure
+
+```bash
+cp .env.example .env
+```
+
+Open `.env` and fill in:
+
+| Variable | Required | Notes |
+| --- | --- | --- |
+| `SPOTIFY_CLIENT_ID` | yes | From step 2 |
+| `LASTFM_API_KEY` | yes | From step 3 |
+| `SPOTIFY_REDIRECT_URI` | no | Defaults to `http://127.0.0.1:8888/callback`. If you change it, make it match the dashboard exactly. |
+
+Values already set in your environment take precedence over `.env`.
+
+### Running it
 
 Preview first. `--dry-run` reads everything and shows what would be added, but
 doesn't create or change any Spotify playlists:
@@ -169,8 +220,9 @@ file to fetch fresh tags.
 
 ## Editing `genre_map.json`
 
-The easiest way to edit it is the web UI's **Genre map** tab. The file looks
-like this:
+This is the command-line version's genre map. (The website keeps its own copy in
+your browser, edited in the **Map** tab; Export and Import move it between the two.)
+The file looks like this:
 
 ```json
 {
@@ -188,14 +240,13 @@ like this:
   name, like `Pop` above.
 - To send a genre to a playlist with a different name, use an object with
   `keywords` and `playlist`, like `EDM` above. Several genres can share a
-  playlist. The web UI also stores the playlist's ID (`"playlist_id"`), so
+  playlist. The website also stores the playlist's ID (`"playlist_id"`), so
   renaming the playlist in Spotify doesn't break anything.
 - Playlist names are matched case-insensitively against playlists you own. If
   there's no match, Spotassist creates a private playlist with that name.
 - Keywords are Last.fm tags. A song joins a genre when one of its artist's top
   tags equals a keyword. Tags are compared whole, so `pop` doesn't match `k pop`.
-- Older files that use `"playlists"` instead of `"genres"` still work. Saving
-  from the web UI converts them.
+- Older files that use `"playlists"` instead of `"genres"` still work.
 - Tags and keywords are normalized before they're compared: lowercase,
   `-`/`_` become spaces, `&` becomes `and`. That makes `K-Pop` equal `k pop` and
   `Drum & Bass` equal `drum and bass`.
@@ -245,11 +296,12 @@ After a run, check `unmatched.txt` for tags you could add as keywords.
 
 | File | What it is |
 | --- | --- |
-| `sort_by_genre.py` | Core logic and the command line tool |
-| `spotassist_web.py` | Local web server for the web UI |
-| `web/index.html` | The web page: plain HTML, CSS and JS, no build step |
-| `genre_map.json` | Your genre playlists and their keywords |
-| `tests/` | pytest tests, no network needed |
+| `docs/index.html` | The website's page: HTML, CSS and the UI code, no build step |
+| `docs/spotassist.js` | The website's logic: Spotify login, Last.fm, sorting and clean-up |
+| `docs/config.js` | Optional default keys for your copy of the site |
+| `sort_by_genre.py` | The command-line version |
+| `genre_map.json` | The command-line version's genres and keywords |
+| `tests/` | pytest tests for the command line, and `tests/js/` for the website |
 
 ## Running tests
 
@@ -258,7 +310,12 @@ pip install pytest
 python -m pytest
 ```
 
-The tests cover the pure logic only and make no network calls.
+```bash
+node --test tests/js/*.test.mjs
+```
+
+The JavaScript tests need Node 22 or newer and nothing else. Both suites use
+fake Spotify and Last.fm clients and make no network calls.
 
 ## License
 

@@ -3,6 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src https://api.spotify.com https://accounts.spotify.com https://ws.audioscrobbler.com; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="no-referrer">
+<meta name="description" content="Sort your Spotify playlists into genre playlists using Last.fm tags, and clean out songs that don't fit. Runs entirely in your browser.">
 <title>Spotassist</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%2307040e'/%3E%3Ccircle cx='32' cy='30' r='17' fill='%23ff2e88'/%3E%3Cpath d='M15 30h34M32 13v34M19 21h26M19 39h26' stroke='%2307040e' stroke-width='2.5'/%3E%3Cpath d='M51 22a12 12 0 0 1 0 16M56 17a19 19 0 0 1 0 26' stroke='%2322e4ff' stroke-width='3' fill='none' stroke-linecap='round'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -330,6 +333,17 @@
   .door .btn.primary { --room: var(--pink); --room-ink: #19000c; }
   .loading { text-align: center; padding: 40px 0; font-family: var(--display); letter-spacing: .1em; color: var(--muted); }
 
+  .setup a { color: var(--cyan); }
+  .steps { margin: 6px 0 18px; padding-left: 20px; }
+  .steps li { margin: 10px 0; }
+  .steps li::marker { color: var(--room); font-weight: 800; }
+  .copy-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 8px; }
+  code { font: 13.5px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; background: rgba(5, 3, 11, .7); border: 1px solid var(--line-2); border-radius: 8px; padding: 6px 10px; overflow-wrap: anywhere; }
+  .setup-grid { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 10px 14px; align-items: center; max-width: 620px; }
+  .setup-grid label { font-weight: 600; font-size: 14px; }
+  .setup-grid input { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 14px; }
+  .door .btn.primary:disabled { filter: grayscale(.6); }
+
   @media (max-width: 760px) {
     header { padding: 14px 16px 4px; }
     .brand-mark { width: 44px; height: 44px; }
@@ -351,6 +365,7 @@
     .filter-grid { grid-template-columns: 1fr; }
     .clean-row { grid-template-columns: auto minmax(0, 1fr); }
     .clean-row .chips { grid-column: 2; }
+    .setup-grid { grid-template-columns: 1fr; }
   }
 
   @media (max-width: 440px) {
@@ -571,9 +586,33 @@
 
   <section id="login-view" class="card door" hidden>
     <h1>Sort your playlists by genre</h1>
-    <p class="muted">Spotassist reads a playlist, looks up each artist's genre tags on Last.fm, and adds each song to the genre playlists you set up. You can also remove songs that don't fit a playlist. Log in with Spotify to start.</p>
-    <a class="btn primary big" href="/login">Log in with Spotify</a>
+    <p class="muted">Spotassist reads a playlist, looks up each artist's genre tags on Last.fm, and adds each song to the genre playlists you set up. You can also remove songs that don't fit a playlist. It runs entirely in your browser.</p>
+    <button class="btn primary big" id="login-btn" type="button">Log in with Spotify</button>
     <div id="login-error" class="banner error" hidden></div>
+    <p style="margin:18px 0 0"><button class="btn sm ghost" id="setup-toggle" type="button">Set up your keys</button></p>
+  </section>
+
+  <section id="setup-view" class="card section setup" hidden>
+    <h2>Connect your accounts</h2>
+    <p class="muted small" style="margin-top:-6px">Spotassist needs two free keys: one from Spotify and one from Last.fm. They're saved only in this browser and are only sent to Spotify and Last.fm.</p>
+    <ol class="steps">
+      <li><b>Spotify Client ID.</b> Open the <a href="https://developer.spotify.com/dashboard" target="_blank" rel="noopener noreferrer">Spotify Developer Dashboard</a> and click <b>Create app</b>. Any name works. Add this address under <b>Redirect URIs</b>, exactly as shown, tick <b>Web API</b>, and save. Then copy the <b>Client ID</b> from the app's Settings.
+        <div class="copy-row"><code id="setup-redirect"></code><button class="btn sm" id="copy-redirect" type="button">Copy</button></div>
+        <div class="muted small" style="margin-top:8px">New apps start in Development mode. That's fine: you own the app, so you can log in. To let friends use your app, add their Spotify email under <b>User Management</b>.</div>
+      </li>
+      <li><b>Last.fm API key.</b> Create one at <a href="https://www.last.fm/api/account/create" target="_blank" rel="noopener noreferrer">last.fm/api/account/create</a>. Any app name works, and the callback URL can stay blank. Copy the <b>API key</b> (not the shared secret).</li>
+    </ol>
+    <div class="setup-grid">
+      <label for="setup-client-id">Spotify Client ID</label>
+      <input id="setup-client-id" type="text" autocomplete="off" spellcheck="false">
+      <label for="setup-lastfm-key">Last.fm API key</label>
+      <input id="setup-lastfm-key" type="text" autocomplete="off" spellcheck="false">
+    </div>
+    <div id="setup-error" class="banner error" hidden></div>
+    <div class="map-actions">
+      <button class="btn primary" id="setup-save" type="button">Save keys</button>
+      <span class="muted small" id="setup-note"></span>
+    </div>
   </section>
 
   <section id="app-view" hidden>
@@ -692,7 +731,12 @@
         <div class="map-actions">
           <button class="btn primary" id="save-map-btn" disabled>Save changes</button>
           <button class="btn ghost" id="revert-map-btn" disabled>Discard</button>
+          <span style="flex:1"></span>
+          <button class="btn sm" id="export-map-btn" type="button">Export</button>
+          <button class="btn sm" id="import-map-btn" type="button">Import</button>
+          <input type="file" id="import-map-file" accept="application/json,.json" hidden>
         </div>
+        <p class="muted small" style="margin:10px 0 0">Your genre map is saved in this browser. Export it to back it up or move it to another browser. Import also accepts the <code>genre_map.json</code> used by the command-line version.</p>
       </div>
     </div>
   </section>
@@ -725,7 +769,10 @@
 
 <div class="toast" id="toast" role="status" hidden></div>
 
-<script>
+<script type="module">
+import { Backend, NotLoggedIn } from "./spotassist.js";
+
+const backend = new Backend();
 "use strict";
 
 const $ = (id) => document.getElementById(id);
@@ -751,21 +798,16 @@ function h(tag, props, ...kids) {
   return el;
 }
 
+// Same shape as the old server API: resolves with a copy of the data, or rejects with err.status set.
 async function api(method, path, body) {
-  const opts = { method, headers: {} };
-  if (method !== "GET") opts.headers["X-Spotassist"] = "1";
-  if (body !== undefined) {
-    opts.headers["Content-Type"] = "application/json";
-    opts.body = JSON.stringify(body);
-  }
-  const r = await fetch(path, opts);
-  const data = await r.json().catch(() => null);
-  if (!r.ok) {
-    const err = new Error((data && data.error) || `Request failed (${r.status})`);
-    err.status = r.status;
+  try {
+    const result = await backend.request(method, path, body);
+    return result == null ? result : structuredClone(result);
+  } catch (e) {
+    const err = new Error(e.message);
+    err.status = e instanceof NotLoggedIn ? 401 : 400;
     throw err;
   }
-  return data;
 }
 
 function show(el, message) {
@@ -807,6 +849,7 @@ function showLogin(error) {
 async function showApp() {
   $("loading").hidden = true;
   $("login-view").hidden = true;
+  $("setup-view").hidden = true;
   $("app-view").hidden = false;
   $("user-area").hidden = false;
   $("user-name").textContent = state.user.name;
@@ -1077,7 +1120,7 @@ function renderPlan() {
     stat(songs, plan.applied ? "songs added" : "songs to add"),
     stat(playlists, "playlists getting songs"),
     stat(creates, "new playlists"),
-    stat(plan.targets.reduce((n, t) => n + (t.same_song_skipped || 0), 0), "same songs skipped"),
+    ((n) => stat(n, n === 1 ? "same song skipped" : "same songs skipped"))(plan.targets.reduce((n, t) => n + (t.same_song_skipped || 0), 0)),
     stat(plan.unmatched.length, "unmatched songs"),
   );
 
@@ -1460,6 +1503,87 @@ $("clean-none").onclick = () => tickAll(false);
 $("preview-btn").onclick = startPreview;
 $("apply-btn").onclick = startApply;
 $("source-select").onchange = () => { if ($("source-select").value) $("source-link").value = ""; };
+// ---------------------------------------------------------------- keys & login
+
+function renderSetup() {
+  const s = backend.settings();
+  $("setup-redirect").textContent = s.redirectUri;
+  $("setup-client-id").value = s.savedClientId;
+  $("setup-lastfm-key").value = s.savedLastfmKey;
+  const placeholder = s.hasDefaults ? "Leave blank to use this site's default" : "32 letters and numbers";
+  $("setup-client-id").placeholder = $("setup-lastfm-key").placeholder = placeholder;
+  $("login-btn").disabled = !backend.ready();
+  $("setup-note").textContent = backend.ready() ? "" : "Both keys are needed before you can log in.";
+}
+
+function openSetup(open) {
+  $("setup-view").hidden = !open;
+  $("setup-toggle").textContent = open ? "Hide setup" : (backend.ready() ? "Change your keys" : "Set up your keys");
+}
+
+$("setup-toggle").onclick = () => openSetup($("setup-view").hidden);
+$("setup-save").onclick = () => {
+  show($("setup-error"));
+  try {
+    backend.saveSettings({ clientId: $("setup-client-id").value, lastfmKey: $("setup-lastfm-key").value });
+  } catch (err) {
+    show($("setup-error"), err.message);
+    return;
+  }
+  renderSetup();
+  if (backend.ready()) {
+    openSetup(false);
+    toast("Keys saved. You can log in now.");
+  }
+};
+$("copy-redirect").onclick = async () => {
+  try {
+    await navigator.clipboard.writeText($("setup-redirect").textContent);
+    toast("Copied.");
+  } catch {
+    getSelection().selectAllChildren($("setup-redirect"));  // let them copy it by hand
+  }
+};
+$("login-btn").onclick = async () => {
+  show($("login-error"));
+  try {
+    await backend.login();
+  } catch (err) {
+    show($("login-error"), err.message);
+  }
+};
+
+$("export-map-btn").onclick = () => {
+  const blob = new Blob([JSON.stringify(state.config, null, 2) + "\n"], { type: "application/json" });
+  const link = h("a", { href: URL.createObjectURL(blob), download: "genre_map.json" });
+  document.body.append(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+};
+$("import-map-btn").onclick = () => $("import-map-file").click();
+$("import-map-file").onchange = async (e) => {
+  const file = e.target.files[0];
+  e.target.value = "";
+  if (!file) return;
+  if (state.dirty && !confirm("Replace your unsaved genre map changes with this file?")) return;
+  show($("map-error"));
+  let config;
+  try {
+    config = JSON.parse(await file.text());
+  } catch {
+    show($("map-error"), "That file isn't valid JSON.");
+    return;
+  }
+  try {
+    await api("PUT", "/api/genre-map", config);
+    await loadGenreMap();
+    toast("Genre map imported.");
+  } catch (err) {
+    show($("map-error"), err.message);
+  }
+};
+
 $("logout-btn").onclick = async () => {
   await api("POST", "/api/logout").catch(() => {});
   state.plan = null;
@@ -1501,17 +1625,27 @@ window.addEventListener("beforeunload", (e) => { if (state.dirty) e.preventDefau
 buildScene();
 
 (async function init() {
-  const params = new URLSearchParams(location.search);
-  const loginError = params.get("login_error");
-  if (loginError) history.replaceState(null, "", "/");
+  renderSetup();
+  let loginError = null;
+  try {
+    loginError = await backend.finishLogin();  // if Spotify just sent us back here
+  } catch (err) {
+    loginError = `Spotify login failed: ${err.message}`;
+  }
+  if (!backend.ready()) {
+    showLogin(loginError);
+    openSetup(true);
+    return;
+  }
+  openSetup(false);
   let status;
   try {
     status = await api("GET", "/api/status");
   } catch (err) {
-    $("loading").textContent = "Couldn't reach Spotassist: " + err.message;
+    showLogin(`Couldn't load your account: ${err.message}`);
     return;
   }
-  if (!status.user) { showLogin(loginError && `Spotify login failed: ${loginError}`); return; }
+  if (!status.user) { showLogin(loginError); return; }
   state.user = status.user;
   await showApp();
   if (status.plan) { state.plan = status.plan; renderPlan(); }

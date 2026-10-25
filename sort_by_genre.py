@@ -12,7 +12,7 @@ Usage:
     python sort_by_genre.py "My Big Playlist"             # actually add songs
     python sort_by_genre.py https://open.spotify.com/playlist/XXXX
 
-For a browser UI instead, run: python spotassist_web.py
+For the browser version, open https://anirudh-naveen.github.io/spotify-library-assistant/
 """
 
 import argparse
@@ -202,7 +202,7 @@ class SpotifyAuth:
             server = http.server.HTTPServer((parsed.hostname, parsed.port or 80), _CallbackHandler)
         except OSError as e:
             raise SpotassistError(f"Couldn't listen on {parsed.hostname}:{parsed.port} for the Spotify login "
-                               f"({e}). Is something else (like spotassist_web.py) using that port?")
+                               f"({e}). Is something else (like a local copy of the web page) using that port?")
         server.timeout = 1
 
         print("Opening your browser to log in to Spotify...")
@@ -878,7 +878,7 @@ def main():
     parser = argparse.ArgumentParser(
         prog="sort_by_genre.py",
         description=f"{APP_NAME}: sort a Spotify playlist into genre playlists using Last.fm tags.",
-        epilog="For a browser UI, run: python spotassist_web.py",
+        epilog="Browser version: https://anirudh-naveen.github.io/spotify-library-assistant/",
     )
     parser.add_argument("source", help="Source playlist name, link, or ID")
     parser.add_argument("--dry-run", action="store_true", help="Preview without changing anything")
