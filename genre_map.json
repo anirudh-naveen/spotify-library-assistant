@@ -1,0 +1,16 @@
+{
+  "_help": "Each key is the EXACT name of a genre playlist in your Spotify library (it gets created if missing). Each list holds Last.fm tags that send a song there. A song can go to several playlists. Check unmatched.txt after a run to see tags you could add.",
+
+  "playlists": {
+    "EDM": ["edm", "electronic dance music", "dance", "house", "progressive house", "electro house", "big room", "dubstep", "trance", "future bass", "drum and bass"],
+    "Pop": ["pop", "dance pop", "electropop", "synthpop", "teen pop", "k pop"],
+    "Soft Pop": ["soft pop", "acoustic", "singer songwriter", "soft rock", "ballad", "chill"],
+    "Art Pop": ["art pop", "indie pop", "dream pop", "experimental pop", "alt pop"],
+    "Electronic": ["electronic", "electronica", "synthwave", "idm", "ambient", "downtempo"],
+    "Alternative Metal": ["alternative metal", "nu metal", "metalcore", "metal", "hard rock", "post hardcore"],
+    "Future Bass": ["future bass", "melodic dubstep", "chillstep"],
+    "Emo": ["emo", "pop punk", "emo rap", "midwest emo"]
+  },
+
+  "unsorted_playlist": null
+}
