@@ -41,6 +41,7 @@ class App:
         self.lock = threading.Lock()
         self.job = None
         self.plan = None
+        self.cleanup = None
 
     # --- account
 
@@ -61,6 +62,7 @@ class App:
         with self.lock:
             self.user = None
             self.plan = None
+            self.cleanup = None
 
     def playlists(self):
         my_id = self.current_user()["id"]
@@ -152,6 +154,50 @@ class App:
 
         return self._start("apply", work)
 
+    def start_cleanup(self, playlist, genre_names):
+        if not playlist.strip():
+            raise core.GenrefyError("Pick a playlist to clean up.")
+        if not isinstance(genre_names, list) or not all(isinstance(g, str) for g in genre_names):
+            raise core.GenrefyError("Pick the genre the playlist should match.")
+        genres, _ = core.load_genre_map(self.map_path)
+
+        def work(job):
+            def progress(stage, done, total):
+                job["stage"], job["done"], job["total"] = stage, done, total
+
+            cleanup = core.build_cleanup(self.sp, self.lastfm, playlist, genre_names, genres, progress)
+            cleanup["id"] = secrets.token_hex(8)
+            cleanup["removed"] = []
+            self.cleanup = cleanup
+            return cleanup
+
+        return self._start("cleanup", work)
+
+    def start_remove(self, cleanup_id, uris):
+        if not isinstance(uris, list) or not uris:
+            raise core.GenrefyError("Tick at least one song to remove.")
+        with self.lock:
+            cleanup = self.cleanup
+            if not cleanup or cleanup["id"] != cleanup_id:
+                raise core.GenrefyError("That list is out of date. Find the songs again.")
+            already = set(cleanup["removed"])
+            uris = [str(u) for u in uris if str(u) not in already]
+            if not uris:
+                raise core.GenrefyError("Those songs were already removed.")
+            cleanup["removed"].extend(uris)  # before starting, so a double click can't remove twice
+
+        def work(job):
+            job["stage"] = "Removing songs"
+            removed = core.apply_cleanup(self.sp, cleanup, uris, report=job["log"].append)
+            return {"cleanup_id": cleanup_id, "removed": removed, "uris": uris}
+
+        try:
+            return self._start("remove", work)
+        except core.GenrefyError:
+            with self.lock:  # never started, so those songs weren't removed after all
+                cleanup["removed"] = [u for u in cleanup["removed"] if u not in uris]
+            raise
+
 
 class Handler(http.server.BaseHTTPRequestHandler):
     app = None              # set in main()
@@ -229,6 +275,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self._handle({
             "/api/preview": lambda q: self._json(self._preview(self._body())),
             "/api/apply": lambda q: self._json(self.app.start_apply(str(self._body().get("plan_id", "")))),
+            "/api/cleanup": lambda q: self._json(self._cleanup(self._body())),
+            "/api/remove": lambda q: self._json(self._remove(self._body())),
             "/api/logout": lambda q: (self.app.logout(), self._json({"ok": True})),
         }, write=True)
 
@@ -242,6 +290,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
     def _preview(self, body):
         return self.app.start_preview(str(body.get("source", "")), body.get("filters"))
 
+    def _cleanup(self, body):
+        return self.app.start_cleanup(str(body.get("playlist", "")), body.get("genres"))
+
+    def _remove(self, body):
+        return self.app.start_remove(str(body.get("cleanup_id", "")), body.get("uris"))
+
     def status(self):
         user = self.app.current_user()
         plan = self.app.plan
@@ -249,6 +303,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             "user": user,
             "job": self.app.job_state(),
             "plan": plan if user else None,
+            "cleanup": self.app.cleanup if user else None,
         }
 
     def page(self, query):

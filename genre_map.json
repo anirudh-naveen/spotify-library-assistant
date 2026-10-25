@@ -5,7 +5,6 @@
       "keywords": [
         "edm",
         "electronic dance music",
-        "dance",
         "house",
         "progressive house",
         "electro house",
@@ -27,8 +26,8 @@
         "teen pop",
         "k pop"
       ],
-      "playlist": "Pop",
-      "playlist_id": "4eocvOuS19g8BBJlUYyWji"
+      "playlist": "Nostalgia",
+      "playlist_id": "7JpqFt35JtEWjZZ7HyRlw9"
     },
     "Soft Pop": {
       "keywords": [
@@ -39,8 +38,8 @@
         "ballad",
         "chill"
       ],
-      "playlist": "Pop",
-      "playlist_id": "4eocvOuS19g8BBJlUYyWji"
+      "playlist": "Nostalgia",
+      "playlist_id": "7JpqFt35JtEWjZZ7HyRlw9"
     },
     "Art Pop": {
       "keywords": [
@@ -50,8 +49,8 @@
         "experimental pop",
         "alt pop"
       ],
-      "playlist": "Pop",
-      "playlist_id": "4eocvOuS19g8BBJlUYyWji"
+      "playlist": "Nostalgia",
+      "playlist_id": "7JpqFt35JtEWjZZ7HyRlw9"
     },
     "Electronic": {
       "keywords": [
@@ -62,29 +61,13 @@
         "ambient",
         "downtempo"
       ],
-      "playlist": "EDM",
-      "playlist_id": "1TTFxYXso6BlOUjjciVRto"
+      "playlist": "Dance"
     },
-    "Alternative Metal": {
+    "Dance": {
       "keywords": [
-        "alternative metal",
-        "nu metal",
-        "metalcore",
-        "metal",
-        "hard rock",
-        "post hardcore"
+        "dance"
       ],
-      "playlist": "Rocks & Metals",
-      "playlist_id": "7iKe3tpD7BsJ4tz9KvV8qp"
-    },
-    "Future Bass": {
-      "keywords": [
-        "future bass",
-        "melodic dubstep",
-        "chillstep"
-      ],
-      "playlist": "EDM",
-      "playlist_id": "1TTFxYXso6BlOUjjciVRto"
+      "playlist": "Dance"
     }
   },
   "unsorted_playlist": null

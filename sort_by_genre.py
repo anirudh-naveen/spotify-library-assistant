@@ -345,6 +345,18 @@ class Spotify:
         for batch in chunks(uris, 100):
             self.call("POST", f"playlists/{playlist_id}/items", json={"uris": batch})
 
+    def remove_tracks(self, playlist_id, uris):
+        """Remove every occurrence of these tracks from the playlist."""
+        for batch in chunks(uris, 100):
+            items = [{"uri": u} for u in batch]
+            try:
+                self.call("DELETE", f"playlists/{playlist_id}/items", json={"items": items})
+            except SpotifyError as e:
+                if e.status != 400:
+                    raise
+                # older API versions call the list "tracks"
+                self.call("DELETE", f"playlists/{playlist_id}/items", json={"tracks": items})
+
 
 # ---------------------------------------------------------------- Last.fm
 
@@ -785,6 +797,73 @@ def apply_plan(sp, plan, report=print):
             report(f'Created playlist "{name}"')
         sp.add_tracks(playlist_id, uris)
         report(f"{name}: added {len(uris)} songs")
+
+
+# ---------------------------------------------------------------- clean up
+
+def build_cleanup(sp, lastfm, playlist, genre_names, genres, progress=None):
+    """Find songs in one of your playlists whose artists match none of the given genres' keywords.
+
+    `genre_names` is one genre name or a list of them (e.g. every genre that feeds this playlist).
+    Changes nothing. Songs whose artists have no Last.fm tags at all are marked "unknown",
+    since there's no evidence either way. The returned dict is JSON-serializable.
+    """
+    progress = progress or (lambda stage, done, total: None)
+    names = [genre_names] if isinstance(genre_names, str) else list(dict.fromkeys(genre_names or []))
+    if not names:
+        raise GenrefyError("Pick the genre the playlist should match.")
+    missing = [g for g in names if g not in genres]
+    if missing:
+        raise GenrefyError(f'There\'s no genre called "{missing[0]}" in the genre map.')
+    keywords = {g: genres[g]["keywords"] for g in names}
+
+    progress("Reading your playlists", 0, 0)
+    my_id = sp.me()["id"]
+    mine = sp.my_playlists()
+    playlist_id, _ = resolve_source(playlist, index_by_name(mine, my_id))
+    p = next((x for x in mine if x.get("id") == playlist_id), None)
+    if not p or not can_edit(p, my_id):
+        raise GenrefyError("You can only clean up playlists you own or collaborate on.")
+
+    progress("Reading the playlist", 0, 0)
+    tracks, seen = [], set()
+    for t in sp.playlist_tracks(playlist_id):
+        if t["uri"] not in seen:  # a repeated song only needs checking once
+            seen.add(t["uri"])
+            tracks.append(track_summary(t))
+
+    off = []
+    try:
+        for i, track in enumerate(tracks, 1):
+            hits, tags = match_genres(track["artists"], keywords, lastfm.tags)
+            if not hits:
+                off.append({**track, "tags": tags, "unknown": not tags})
+            progress("Looking up genres on Last.fm", i, len(tracks))
+            if i % 25 == 0:
+                lastfm.save()
+    finally:
+        lastfm.save()
+
+    return {
+        "playlist_id": playlist_id,
+        "playlist_name": p.get("name") or "(untitled)",
+        "genres": names,
+        "keywords": sorted(set().union(*keywords.values())),
+        "total": len(tracks),
+        "off": off,
+    }
+
+
+def apply_cleanup(sp, cleanup, uris, report=print):
+    """Remove the chosen songs (which must come from cleanup["off"]) from the playlist."""
+    allowed = {t["uri"] for t in cleanup["off"]}
+    uris = list(dict.fromkeys(u for u in uris if u in allowed))
+    if not uris:
+        report("Nothing selected to remove")
+        return 0
+    sp.remove_tracks(cleanup["playlist_id"], uris)
+    report(f'{cleanup["playlist_name"]}: removed {len(uris)} songs')
+    return len(uris)
 
 
 def write_unmatched(unmatched, path=UNMATCHED_FILE):

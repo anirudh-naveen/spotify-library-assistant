@@ -95,6 +95,27 @@ http://127.0.0.1:8888 in your browser. From there you can:
   to add it as a keyword for a genre.
 - edit your genres in the **Genre map** tab, and pick the playlist each genre goes
   to: one you already own, or a new one with any name
+- remove songs that don't fit from one of your playlists in the **Clean up** tab
+  (see below)
+
+#### Cleaning up a playlist
+
+The **Clean up** tab removes songs that don't fit a playlist:
+
+1. Pick one of your playlists and the genre(s) it should match. If several genres
+   go to that playlist, "Any genre that goes here" is picked for you, so songs
+   from all of them count as fitting.
+2. Click **Find songs**. Genrefy lists every song whose artists match none of
+   those genres' keywords, along with their Last.fm tags so you can see why.
+   Nothing changes yet.
+3. Every listed song starts ticked, except ones whose artists have no Last.fm
+   tags at all, since there's no evidence either way. Untick anything you want to
+   keep.
+4. Click **Remove** and confirm. Spotify has no undo for this, so you'd have to
+   add songs back yourself.
+
+The check is per artist, the same as sorting. Fixing your keywords first (for
+example removing broad tags like `dance`) makes the list more accurate.
 
 The server only answers requests from that page on your own computer. It uses
 the same address as the Spotify redirect URI, so stop it (Ctrl+C) before using

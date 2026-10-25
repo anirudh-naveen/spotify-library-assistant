@@ -174,6 +174,18 @@
   }
   .applybar-inner { max-width: 1040px; margin: 0 auto; padding: 12px 16px; display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
 
+  .btn.remove { background: var(--bad); border-color: var(--bad); color: var(--surface); }
+  .btn.remove:hover { filter: brightness(1.07); background: var(--bad); }
+  .clean-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+  .clean-row {
+    display: grid; grid-template-columns: auto minmax(0, 1fr) minmax(0, 1.3fr); gap: 12px; align-items: start;
+    padding: 10px 0; border-top: 1px solid var(--border); cursor: pointer;
+  }
+  .clean-row input { margin-top: 4px; width: 16px; height: 16px; accent-color: var(--bad); }
+  .clean-row .title { font-weight: 600; overflow-wrap: anywhere; }
+  .clean-row .artists { color: var(--muted); font-size: 13px; }
+  .clean-row.kept .title, .clean-row.kept .artists { opacity: .55; }
+  .clean-group { margin: 18px 0 4px; font-size: 13px; font-weight: 600; color: var(--muted); }
   .map-row { display: grid; grid-template-columns: minmax(120px, 180px) minmax(0, 1fr) minmax(170px, 230px) auto; gap: 12px; align-items: start; padding: 12px 0; border-top: 1px solid var(--border); }
   .map-head { color: var(--muted); font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; border-top: 0; padding-bottom: 0; }
   .target-pick { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
@@ -204,6 +216,8 @@
     .unmatched-row, .map-row { grid-template-columns: 1fr; }
     .map-head { display: none; }
     .filter-grid { grid-template-columns: 1fr; }
+    .clean-row { grid-template-columns: auto minmax(0, 1fr); }
+    .clean-row .chips { grid-column: 2; }
     .target-pick::before { content: "Goes to"; color: var(--muted); font-size: 12px; font-weight: 600; }
     .map-row > .btn { justify-self: start; }
     .user .who { display: none; }
@@ -238,6 +252,7 @@
     <div class="tabs" role="tablist">
       <button class="tab" role="tab" id="tab-sort" aria-selected="true" aria-controls="sort-panel">Sort</button>
       <button class="tab" role="tab" id="tab-map" aria-selected="false" aria-controls="map-panel">Genre map</button>
+      <button class="tab" role="tab" id="tab-clean" aria-selected="false" aria-controls="clean-panel">Clean up</button>
     </div>
 
     <div id="sort-panel" role="tabpanel">
@@ -313,6 +328,36 @@
         </div>
       </div>
     </div>
+
+    <div id="clean-panel" role="tabpanel" hidden>
+      <div class="card">
+        <h2>Clean up a playlist</h2>
+        <p class="muted small" style="margin-top:-6px">Pick one of your playlists and what it should be. Genrefy lists the songs whose artists match none of those genres' keywords on Last.fm. You choose which to remove, and nothing changes until you confirm.</p>
+        <div class="source-row">
+          <select id="clean-playlist" aria-label="Playlist to clean up"></select>
+          <select id="clean-genre" aria-label="Genres the playlist should match"></select>
+          <button class="btn primary" id="clean-btn">Find songs</button>
+        </div>
+        <div id="clean-progress" class="progress" hidden>
+          <div class="small"><span id="clean-progress-stage"></span> <span id="clean-progress-count" class="muted"></span></div>
+          <div class="bar" id="clean-progress-bar"><div></div></div>
+        </div>
+        <div id="clean-error" class="banner error" hidden></div>
+        <div id="clean-done" class="banner ok" hidden></div>
+      </div>
+
+      <div id="clean-results" class="card section" hidden>
+        <div class="clean-head">
+          <h2 id="clean-title" style="margin:0"></h2>
+          <div>
+            <button class="btn sm ghost" id="clean-all">Tick all</button>
+            <button class="btn sm ghost" id="clean-none">Untick all</button>
+          </div>
+        </div>
+        <p class="muted small" id="clean-sub"></p>
+        <div id="clean-list"></div>
+      </div>
+    </div>
   </section>
 </main>
 
@@ -320,6 +365,13 @@
   <div class="applybar-inner">
     <span id="applybar-text"></span>
     <button class="btn primary" id="apply-btn">Add songs</button>
+  </div>
+</div>
+
+<div class="applybar" id="cleanbar" hidden>
+  <div class="applybar-inner">
+    <span id="cleanbar-text"></span>
+    <button class="btn remove" id="remove-btn">Remove songs</button>
   </div>
 </div>
 
@@ -340,7 +392,10 @@
 "use strict";
 
 const $ = (id) => document.getElementById(id);
-const state = { user: null, playlists: [], plan: null, config: null, rows: [], unsorted: null, dirty: false, polling: null };
+const state = {
+  user: null, playlists: [], plan: null, config: null, rows: [], unsorted: null, dirty: false, polling: null,
+  cleanup: null, cleanTicked: new Set(),
+};
 
 // ---------------------------------------------------------------- helpers
 
@@ -406,6 +461,7 @@ function showLogin(error) {
   $("app-view").hidden = true;
   $("user-area").hidden = true;
   $("applybar").hidden = true;
+  $("cleanbar").hidden = true;
   $("login-view").hidden = false;
   show($("login-error"), error);
 }
@@ -421,12 +477,12 @@ async function showApp() {
 }
 
 function selectTab(which) {
-  const sort = which === "sort";
-  $("tab-sort").setAttribute("aria-selected", sort);
-  $("tab-map").setAttribute("aria-selected", !sort);
-  $("sort-panel").hidden = !sort;
-  $("map-panel").hidden = sort;
+  for (const tab of ["sort", "map", "clean"]) {
+    $("tab-" + tab).setAttribute("aria-selected", tab === which);
+    $(tab + "-panel").hidden = tab !== which;
+  }
   renderApplyBar();
+  renderCleanBar();
 }
 
 // ---------------------------------------------------------------- playlists
@@ -449,6 +505,14 @@ async function loadPlaylists() {
       list.map((p) => h("option", { value: p.id }, p.count != null ? `${p.name} (${p.count})` : p.name))));
   }
   select.value = previous;
+
+  const clean = $("clean-playlist");
+  const cleanPrevious = clean.value;
+  clean.replaceChildren(h("option", { value: "" }, "Choose one of your playlists…"),
+    ...state.playlists.filter((p) => p.editable).map((p) =>
+      h("option", { value: p.id }, p.count != null ? `${p.name} (${p.count})` : p.name)));
+  clean.value = cleanPrevious;
+  renderCleanGenres();
 }
 
 // ---------------------------------------------------------------- preview & apply
@@ -512,15 +576,17 @@ function trackJob(job) {
   }, 600);
 }
 
+const isCleanJob = (job) => job.kind === "cleanup" || job.kind === "remove";
+
 function renderJob(job) {
   const running = job.status === "running";
-  $("progress").hidden = !running;
-  $("preview-btn").disabled = running;
-  $("apply-btn").disabled = running;
+  for (const id of ["preview-btn", "apply-btn", "clean-btn", "remove-btn"]) $(id).disabled = running;
+  const prefix = isCleanJob(job) ? "clean-" : "";
+  $(prefix + "progress").hidden = !running;
   if (!running) return;
-  $("progress-stage").textContent = job.stage + "…";
-  $("progress-count").textContent = job.total ? `${job.done.toLocaleString()} / ${job.total.toLocaleString()}` : "";
-  const bar = $("progress-bar");
+  $(prefix + "progress-stage").textContent = job.stage + "…";
+  $(prefix + "progress-count").textContent = job.total ? `${job.done.toLocaleString()} / ${job.total.toLocaleString()}` : "";
+  const bar = $(prefix + "progress-bar");
   bar.classList.toggle("indeterminate", !job.total);
   bar.firstElementChild.style.width = job.total ? `${(100 * job.done) / job.total}%` : "";
 }
@@ -528,10 +594,21 @@ function renderJob(job) {
 function finishJob(job) {
   if (job.status === "error") {
     if (/log in/i.test(job.error)) { showLogin("Your Spotify login expired. Log in again."); return; }
-    show($("sort-error"), job.error);
+    show($(isCleanJob(job) ? "clean-error" : "sort-error"), job.error);
     return;
   }
-  if (job.kind === "preview") {
+  if (job.kind === "cleanup") {
+    showCleanup(job.result);
+  } else if (job.kind === "remove") {
+    show($("clean-done"), "Done. " + job.log.join(" · "));
+    if (state.cleanup && state.cleanup.id === job.result.cleanup_id) {
+      const gone = new Set(job.result.uris);
+      state.cleanup.off = state.cleanup.off.filter((t) => !gone.has(t.uri));
+      for (const uri of gone) state.cleanTicked.delete(uri);
+      renderCleanup();
+    }
+    loadPlaylists();  // song counts changed
+  } else if (job.kind === "preview") {
     state.plan = job.result;
     renderPlan();
   } else if (job.kind === "apply") {
@@ -692,6 +769,7 @@ async function loadGenreMap() {
   state.unsorted = unsorted ? targetFromConfig(unsorted, "Unsorted") : { target: "", newName: "Unsorted" };
   setDirty(false);
   renderMap();
+  renderCleanGenres();
 }
 
 const editablePlaylists = () => state.playlists.filter((p) => p.editable);
@@ -816,12 +894,137 @@ async function saveGenreMap() {
   await api("PUT", "/api/genre-map", config);
   state.config = config;
   setDirty(false);
+  renderCleanGenres();
+}
+
+// ---------------------------------------------------------------- clean up
+
+// Saved genres (not unsaved edits), with the playlist each one goes to.
+function savedGenres() {
+  const raw = (state.config && (state.config.genres || state.config.playlists)) || {};
+  return Object.entries(raw).map(([genre, value]) => {
+    const isSpec = value && typeof value === "object" && !Array.isArray(value);
+    return { genre, ...targetFromConfig(isSpec ? value : null, genre) };
+  });
+}
+
+function renderCleanGenres() {
+  const select = $("clean-genre");
+  const playlistId = $("clean-playlist").value;
+  const genres = savedGenres();
+  const feeders = genres.filter((g) => playlistId && g.target === "id:" + playlistId).map((g) => g.genre);
+  const previous = select.value;
+  select.replaceChildren(
+    ...(feeders.length > 1
+      ? [h("option", { value: JSON.stringify(feeders) }, `Any genre that goes here (${feeders.join(", ")})`)]
+      : []),
+    ...genres.map((g) => h("option", { value: JSON.stringify([g.genre]) }, g.genre)));
+  // default to what this playlist is fed by; otherwise keep the user's last choice
+  const preferred = feeders.length ? JSON.stringify(feeders.length > 1 ? feeders : [feeders[0]]) : previous;
+  select.value = [...select.options].some((o) => o.value === preferred) ? preferred : select.options[0]?.value || "";
+}
+
+async function startCleanup() {
+  const playlist = $("clean-playlist").value;
+  show($("clean-error"));
+  show($("clean-done"));
+  if (!playlist) { show($("clean-error"), "Choose a playlist to clean up."); return; }
+  if (state.dirty && !confirm("You have unsaved genre map changes. Use the saved version?")) return;
+  try {
+    const job = await api("POST", "/api/cleanup", { playlist, genres: JSON.parse($("clean-genre").value || "[]") });
+    trackJob(job);
+  } catch (err) {
+    if (!handleAuthError(err)) show($("clean-error"), err.message);
+  }
+}
+
+function showCleanup(cleanup) {
+  const removed = new Set(cleanup.removed || []);
+  cleanup.off = cleanup.off.filter((t) => !removed.has(t.uri));
+  state.cleanup = cleanup;
+  // songs with no tags at all aren't evidence of anything, so they start unticked
+  state.cleanTicked = new Set(cleanup.off.filter((t) => !t.unknown).map((t) => t.uri));
+  renderCleanup();
+}
+
+function renderCleanup() {
+  const c = state.cleanup;
+  $("clean-results").hidden = !c;
+  renderCleanBar();
+  if (!c) return;
+  const genres = c.genres.join(", ");
+  $("clean-title").textContent = c.off.length
+    ? `${plural(c.off.length, "song")} in “${c.playlist_name}” ${c.off.length === 1 ? "doesn't" : "don't"} match ${genres}`
+    : `Every song in “${c.playlist_name}” matches ${genres}`;
+  $("clean-sub").textContent = c.off.length
+    ? `Checked ${plural(c.total, "song")} against these Last.fm tags: ${c.keywords.join(", ")}. Ticked songs will be removed. Untick any you want to keep.`
+    : `Checked ${plural(c.total, "song")}. Nothing to remove.`;
+  $("clean-all").hidden = $("clean-none").hidden = !c.off.length;
+
+  const row = (t) => {
+    const box = h("input", { type: "checkbox", "aria-label": `Remove ${t.name}` });
+    box.checked = state.cleanTicked.has(t.uri);
+    const el = h("label", { class: "clean-row" + (box.checked ? "" : " kept") },
+      box,
+      h("div", {}, h("div", { class: "title" }, t.name), h("div", { class: "artists" }, t.artists.join(", ") || "Unknown artist")),
+      h("div", { class: "chips" }, t.tags.length
+        ? t.tags.map((tag) => h("span", { class: "chip static" }, tag))
+        : h("span", { class: "muted small" }, "No Last.fm tags")));
+    box.onchange = () => {
+      if (box.checked) state.cleanTicked.add(t.uri); else state.cleanTicked.delete(t.uri);
+      el.classList.toggle("kept", !box.checked);
+      renderCleanBar();
+    };
+    return el;
+  };
+  const tagged = c.off.filter((t) => !t.unknown);
+  const unknown = c.off.filter((t) => t.unknown);
+  $("clean-list").replaceChildren(
+    ...tagged.map(row),
+    unknown.length ? h("div", { class: "clean-group" }, `No Last.fm tags, so Genrefy can't tell (${unknown.length}). Unticked by default.`) : null,
+    ...unknown.map(row));
+}
+
+function renderCleanBar() {
+  const c = state.cleanup;
+  const n = state.cleanTicked.size;
+  const visible = !!(c && n && !$("clean-panel").hidden && state.user);
+  $("cleanbar").hidden = !visible;
+  if (!visible) return;
+  $("cleanbar-text").textContent = `${plural(n, "song")} ticked for removal from “${c.playlist_name}”.`;
+  $("remove-btn").textContent = `Remove ${plural(n, "song")}`;
+}
+
+async function startRemove() {
+  const c = state.cleanup;
+  const uris = [...state.cleanTicked];
+  if (!c || !uris.length) return;
+  const ok = confirm(`Remove ${plural(uris.length, "song")} from “${c.playlist_name}”?\n\n` +
+    "Spotify has no undo for this. You'd have to add them back yourself.");
+  if (!ok) return;
+  show($("clean-error"));
+  try {
+    trackJob(await api("POST", "/api/remove", { cleanup_id: c.id, uris }));
+  } catch (err) {
+    if (!handleAuthError(err)) show($("clean-error"), err.message);
+  }
+}
+
+function tickAll(on) {
+  state.cleanTicked = new Set(on ? state.cleanup.off.map((t) => t.uri) : []);
+  renderCleanup();
 }
 
 // ---------------------------------------------------------------- wiring
 
 $("tab-sort").onclick = () => selectTab("sort");
 $("tab-map").onclick = () => selectTab("map");
+$("tab-clean").onclick = () => selectTab("clean");
+$("clean-playlist").onchange = renderCleanGenres;
+$("clean-btn").onclick = startCleanup;
+$("remove-btn").onclick = startRemove;
+$("clean-all").onclick = () => tickAll(true);
+$("clean-none").onclick = () => tickAll(false);
 $("preview-btn").onclick = startPreview;
 $("apply-btn").onclick = startApply;
 $("source-select").onchange = () => { if ($("source-select").value) $("source-link").value = ""; };
@@ -878,6 +1081,7 @@ window.addEventListener("beforeunload", (e) => { if (state.dirty) e.preventDefau
   state.user = status.user;
   await showApp();
   if (status.plan) { state.plan = status.plan; renderPlan(); }
+  if (status.cleanup) showCleanup(status.cleanup);
   if (status.job && status.job.status === "running") trackJob(status.job);
 })();
 </script>

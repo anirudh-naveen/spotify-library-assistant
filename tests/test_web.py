@@ -23,6 +23,7 @@ def make_app(tmp_path):
     app.lock = web.threading.Lock()
     app.job = None
     app.plan = None
+    app.cleanup = None
     return app
 
 
@@ -85,3 +86,32 @@ def test_job_errors_are_reported(tmp_path, monkeypatch):
     app._start("preview", boom)
     job = wait(app)
     assert job["status"] == "error" and "Last.fm" in job["error"]
+
+
+def test_remove_guards(tmp_path, monkeypatch):
+    app = make_app(tmp_path)
+    app.sp = object()
+    removed = []
+    monkeypatch.setattr(sbg, "apply_cleanup", lambda sp, c, uris, report: removed.append(list(uris)) or len(uris))
+    app.cleanup = {"id": "c1", "removed": [], "off": [{"uri": "a"}, {"uri": "b"}]}
+
+    with pytest.raises(sbg.GenrefyError, match="Tick at least one"):
+        app.start_remove("c1", [])
+    with pytest.raises(sbg.GenrefyError, match="out of date"):
+        app.start_remove("old", ["a"])
+    app.start_remove("c1", ["a"])
+    wait(app)
+    with pytest.raises(sbg.GenrefyError, match="already removed"):
+        app.start_remove("c1", ["a"])
+    app.start_remove("c1", ["a", "b"])   # a second batch from the same list works
+    wait(app)
+    assert removed == [["a"], ["b"]]
+
+
+def test_remove_rolls_back_if_busy(tmp_path):
+    app = make_app(tmp_path)
+    app.cleanup = {"id": "c1", "removed": [], "off": [{"uri": "a"}]}
+    app.job = {"status": "running"}
+    with pytest.raises(sbg.GenrefyError, match="still working"):
+        app.start_remove("c1", ["a"])
+    assert app.cleanup["removed"] == []

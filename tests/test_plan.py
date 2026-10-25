@@ -19,7 +19,7 @@ class FakeSpotify:
     def __init__(self, playlists, contents):
         self.playlists = playlists      # list of playlist objects
         self.contents = contents        # playlist id -> list of tracks
-        self.created, self.added = [], []
+        self.created, self.added, self.removed = [], [], []
 
     def me(self):
         return {"id": ME, "display_name": "Me"}
@@ -41,6 +41,10 @@ class FakeSpotify:
     def add_tracks(self, playlist_id, uris):
         self.added.append((playlist_id, list(uris)))
         self.contents[playlist_id].extend({"uri": u} for u in uris)
+
+    def remove_tracks(self, playlist_id, uris):
+        self.removed.append((playlist_id, list(uris)))
+        self.contents[playlist_id] = [t for t in self.contents[playlist_id] if t["uri"] not in uris]
 
 
 class FakeLastFM:
@@ -199,3 +203,82 @@ def test_date_filters_limit_the_source(world):
     assert uris(next(t for t in plan["targets"] if t["name"] == "EDM")) == ["new"]
     plan = sbg.build_plan(sp, lastfm, "Big Mix", genres, filters=sbg.parse_date_filters({"released_before": "2010"}))
     assert uris(next(t for t in plan["targets"] if t["name"] == "EDM")) == ["old"]
+
+
+# ---------------------------------------------------------------- clean up
+
+@pytest.fixture
+def messy():
+    sp = FakeSpotify(
+        [playlist("edm", "EDM"), playlist("theirs", "Theirs", owner="someone")],
+        {"edm": [
+            track("dj", "Banger", "DJ"),
+            track("pop", "Ballad", "Singer"),
+            track("pop", "Ballad", "Singer"),        # repeated: listed once
+            track("mystery", "Demo", "Nobody"),       # no tags at all
+            track("collab", "Collab", "Singer", "DJ"),  # featured artist matches
+            track("synth", "Glow", "Synth Kid"),
+        ], "theirs": []},
+    )
+    lastfm = FakeLastFM({"DJ": ["house"], "Singer": ["pop", "dance"], "Synth Kid": ["electronic"]})
+    genres, _ = sbg.parse_genre_map({"genres": {
+        "EDM": {"keywords": ["house"], "playlist_id": "edm"},
+        "Electronic": {"keywords": ["electronic"], "playlist_id": "edm"},
+        "Pop": ["pop"],
+    }})
+    return sp, lastfm, genres
+
+
+def test_cleanup_lists_songs_that_dont_match(messy):
+    sp, lastfm, genres = messy
+    c = sbg.build_cleanup(sp, lastfm, "EDM", "EDM", genres)
+    assert c["playlist_id"] == "edm" and c["total"] == 5
+    off = {t["name"]: t for t in c["off"]}
+    assert set(off) == {"Ballad", "Demo", "Glow"}
+    assert off["Ballad"]["tags"] == ["pop", "dance"] and not off["Ballad"]["unknown"]
+    assert off["Demo"]["unknown"]
+    assert sp.removed == []  # finding changes nothing
+
+
+def test_cleanup_with_several_genres(messy):
+    sp, lastfm, genres = messy
+    c = sbg.build_cleanup(sp, lastfm, "edm", ["EDM", "Electronic"], genres)
+    assert {t["name"] for t in c["off"]} == {"Ballad", "Demo"}
+    assert c["keywords"] == ["electronic", "house"]
+
+
+@pytest.mark.parametrize("playlist, genres_arg, message", [
+    ("Theirs", "EDM", "only clean up playlists you own"),
+    ("EDM", "Jazz", "no genre called"),
+    ("EDM", [], "Pick the genre"),
+])
+def test_cleanup_refuses(messy, playlist, genres_arg, message):
+    sp, lastfm, genres = messy
+    with pytest.raises(sbg.GenrefyError, match=message):
+        sbg.build_cleanup(sp, lastfm, playlist, genres_arg, genres)
+
+
+def test_apply_cleanup_removes_only_listed_songs(messy):
+    sp, lastfm, genres = messy
+    c = sbg.build_cleanup(sp, lastfm, "EDM", "EDM", genres)
+    log = []
+    n = sbg.apply_cleanup(sp, c, ["spotify:track:pop", "spotify:track:dj", "spotify:track:pop"], report=log.append)
+    assert n == 1
+    assert sp.removed == [("edm", ["spotify:track:pop"])]  # "dj" matched EDM, so it isn't removable
+    assert [t["uri"] for t in sp.contents["edm"]].count("spotify:track:pop") == 0
+    assert log == ["EDM: removed 1 songs"]
+
+
+def test_remove_tracks_falls_back_to_old_body(monkeypatch):
+    calls = []
+
+    def fake_call(self, method, url, **kwargs):
+        calls.append(kwargs["json"])
+        if "items" in kwargs["json"]:
+            raise sbg.SpotifyError(400, method, url, "bad request")
+        return {}
+
+    monkeypatch.setattr(sbg.Spotify, "call", fake_call)
+    sbg.Spotify(auth=None).remove_tracks("p", [f"spotify:track:{i}" for i in range(150)])
+    assert [list(c) for c in calls] == [["items"], ["tracks"], ["items"], ["tracks"]]
+    assert len(calls[1]["tracks"]) == 100 and len(calls[3]["tracks"]) == 50
