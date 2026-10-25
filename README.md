@@ -1,7 +1,3 @@
-<<<<<<< Updated upstream
-# genrefy
-Spotify third-party application that helps organize playlists and other useful features.
-=======
 # Genrefy
 
 Genrefy sorts a big Spotify playlist into smaller genre playlists.
@@ -177,4 +173,3 @@ The tests cover the pure logic only and make no network calls.
 ## License
 
 [MIT](LICENSE)
->>>>>>> Stashed changes
